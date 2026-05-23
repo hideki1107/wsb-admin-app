@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   deleteExpense,
   listExpenses,
@@ -15,12 +15,23 @@ import {
 import { EXPENSE_THEME } from "@/lib/theme";
 import { yen } from "@/lib/format";
 
+type CategoryFilter = ExpenseCategory | "all";
+
 export default function ExpensesListPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [filter, setFilter] = useState<CategoryFilter>("all");
+
+  const filteredExpenses = useMemo(
+    () =>
+      filter === "all"
+        ? expenses
+        : expenses.filter((e) => e.category === filter),
+    [expenses, filter],
+  );
 
   async function refresh() {
     setExpenses(await listExpenses());
@@ -47,7 +58,7 @@ export default function ExpensesListPage() {
       </div>
     );
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   return (
     <div className="space-y-5">
@@ -56,20 +67,45 @@ export default function ExpensesListPage() {
           支出一覧
         </h1>
         <p className="mt-1 text-base text-zinc-500">
-          {expenses.length}件 ・ 合計
+          {filteredExpenses.length}件 ・ 合計
           <span className="ml-1 font-bold text-rose-600">
             -{yen(total)}
           </span>
         </p>
       </div>
 
-      {expenses.length === 0 ? (
+      <div>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
+            カテゴリで絞り込み
+          </span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as CategoryFilter)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 sm:w-72"
+          >
+            <option value="all">全カテゴリ</option>
+            {EXPENSE_CATEGORIES.map((cat) => {
+              const t = EXPENSE_THEME[cat];
+              return (
+                <option key={cat} value={cat}>
+                  {t.emoji} {t.label}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+      </div>
+
+      {filteredExpenses.length === 0 ? (
         <div className="rounded-2xl bg-white p-8 text-center text-base text-zinc-500 shadow-md">
-          まだ記録がありません
+          {expenses.length === 0
+            ? "まだ記録がありません"
+            : "該当する記録がありません"}
         </div>
       ) : (
         <ul className="space-y-2.5">
-          {expenses.map((e) => {
+          {filteredExpenses.map((e) => {
             const t = EXPENSE_THEME[e.category];
             return (
               <li

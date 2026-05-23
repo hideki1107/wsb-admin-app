@@ -19,6 +19,8 @@ import { yen } from "@/lib/format";
 
 const REQUIRES_VARIANT: SalesChannel[] = ["venue", "online"];
 
+type ChannelFilter = SalesChannel | "all";
+
 export default function SalesListPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
@@ -26,6 +28,12 @@ export default function SalesListPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [filter, setFilter] = useState<ChannelFilter>("all");
+
+  const filteredSales = useMemo(
+    () => (filter === "all" ? sales : sales.filter((s) => s.channel === filter)),
+    [sales, filter],
+  );
 
   async function refresh() {
     const [s, p] = await Promise.all([
@@ -58,7 +66,7 @@ export default function SalesListPage() {
     );
 
   const productMap = new Map(products.map((p) => [p.id, p]));
-  const total = sales.reduce((sum, s) => sum + s.amount, 0);
+  const total = filteredSales.reduce((sum, s) => sum + s.amount, 0);
 
   return (
     <div className="space-y-5">
@@ -67,20 +75,45 @@ export default function SalesListPage() {
           収入一覧
         </h1>
         <p className="mt-1 text-base text-zinc-500">
-          {sales.length}件 ・ 合計
+          {filteredSales.length}件 ・ 合計
           <span className="ml-1 font-bold text-violet-700">
             {yen(total)}
           </span>
         </p>
       </div>
 
-      {sales.length === 0 ? (
+      <div>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
+            カテゴリで絞り込み
+          </span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as ChannelFilter)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 sm:w-72"
+          >
+            <option value="all">全カテゴリ</option>
+            {SALES_CHANNELS.map((ch) => {
+              const t = CHANNEL_THEME[ch];
+              return (
+                <option key={ch} value={ch}>
+                  {t.emoji} {t.label}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+      </div>
+
+      {filteredSales.length === 0 ? (
         <div className="rounded-2xl bg-white p-8 text-center text-base text-zinc-500 shadow-md">
-          まだ記録がありません
+          {sales.length === 0
+            ? "まだ記録がありません"
+            : "該当する記録がありません"}
         </div>
       ) : (
         <ul className="space-y-2.5">
-          {sales.map((s) => {
+          {filteredSales.map((s) => {
             const product = s.productId ? productMap.get(s.productId) : null;
             const variant =
               product && s.variantId
