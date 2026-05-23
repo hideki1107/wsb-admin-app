@@ -17,12 +17,28 @@ import { EXPENSE_THEME } from "@/lib/theme";
 import { yen } from "@/lib/format";
 
 type CategoryFilter = ExpenseCategory | "all";
+const ALL_YEARS = "all" as const;
+type YearFilter = number | typeof ALL_YEARS;
 
 function parseFilter(raw: string | null): CategoryFilter {
   if (!raw) return "all";
   if ((EXPENSE_CATEGORIES as string[]).includes(raw))
     return raw as ExpenseCategory;
   return "all";
+}
+
+function parseYearFilter(raw: string | null): YearFilter {
+  if (!raw || raw === "all") return ALL_YEARS;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : ALL_YEARS;
+}
+
+function buildExpensesListUrl(cat: CategoryFilter, year: YearFilter): string {
+  const params = new URLSearchParams();
+  if (cat !== "all") params.set("category", cat);
+  if (year !== ALL_YEARS) params.set("year", String(year));
+  const qs = params.toString();
+  return qs ? `/expenses/list?${qs}` : "/expenses/list";
 }
 
 export default function ExpensesListPage() {
@@ -37,11 +53,13 @@ function ExpensesListInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = parseFilter(searchParams.get("category"));
+  const year = parseYearFilter(searchParams.get("year"));
 
   function setFilter(next: CategoryFilter) {
-    const url =
-      next === "all" ? "/expenses/list" : `/expenses/list?category=${next}`;
-    router.replace(url, { scroll: false });
+    router.replace(buildExpensesListUrl(next, year), { scroll: false });
+  }
+  function setYear(next: YearFilter) {
+    router.replace(buildExpensesListUrl(filter, next), { scroll: false });
   }
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -50,13 +68,25 @@ function ExpensesListInner() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const filteredExpenses = useMemo(
-    () =>
-      filter === "all"
-        ? expenses
-        : expenses.filter((e) => e.category === filter),
-    [expenses, filter],
-  );
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    for (const e of expenses) {
+      const y = parseInt(e.occurredOn.slice(0, 4), 10);
+      if (!Number.isNaN(y)) set.add(y);
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [expenses]);
+
+  const filteredExpenses = useMemo(() => {
+    let result = expenses;
+    if (filter !== "all") result = result.filter((e) => e.category === filter);
+    if (year !== ALL_YEARS) {
+      result = result.filter(
+        (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
+      );
+    }
+    return result;
+  }, [expenses, filter, year]);
 
   async function refresh() {
     setExpenses(await listExpenses());
@@ -99,7 +129,37 @@ function ExpensesListInner() {
         </p>
       </div>
 
-      <div>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-zinc-600">表示期間</span>
+          <button
+            type="button"
+            onClick={() => setYear(ALL_YEARS)}
+            className={
+              "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
+              (year === ALL_YEARS
+                ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-md"
+                : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
+            }
+          >
+            全期間
+          </button>
+          {availableYears.map((y) => (
+            <button
+              type="button"
+              key={y}
+              onClick={() => setYear(y)}
+              className={
+                "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
+                (year === y
+                  ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-md"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
+              }
+            >
+              {y}年
+            </button>
+          ))}
+        </div>
         <label className="block">
           <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
             カテゴリで絞り込み

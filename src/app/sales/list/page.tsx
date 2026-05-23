@@ -21,11 +21,27 @@ import { yen } from "@/lib/format";
 const REQUIRES_VARIANT: SalesChannel[] = ["venue", "online"];
 
 type ChannelFilter = SalesChannel | "all";
+const ALL_YEARS = "all" as const;
+type YearFilter = number | typeof ALL_YEARS;
 
 function parseFilter(raw: string | null): ChannelFilter {
   if (!raw) return "all";
   if ((SALES_CHANNELS as string[]).includes(raw)) return raw as SalesChannel;
   return "all";
+}
+
+function parseYearFilter(raw: string | null): YearFilter {
+  if (!raw || raw === "all") return ALL_YEARS;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : ALL_YEARS;
+}
+
+function buildSalesListUrl(cat: ChannelFilter, year: YearFilter): string {
+  const params = new URLSearchParams();
+  if (cat !== "all") params.set("category", cat);
+  if (year !== ALL_YEARS) params.set("year", String(year));
+  const qs = params.toString();
+  return qs ? `/sales/list?${qs}` : "/sales/list";
 }
 
 export default function SalesListPage() {
@@ -40,10 +56,13 @@ function SalesListInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = parseFilter(searchParams.get("category"));
+  const year = parseYearFilter(searchParams.get("year"));
 
   function setFilter(next: ChannelFilter) {
-    const url = next === "all" ? "/sales/list" : `/sales/list?category=${next}`;
-    router.replace(url, { scroll: false });
+    router.replace(buildSalesListUrl(next, year), { scroll: false });
+  }
+  function setYear(next: YearFilter) {
+    router.replace(buildSalesListUrl(filter, next), { scroll: false });
   }
 
   const [sales, setSales] = useState<Sale[]>([]);
@@ -53,10 +72,25 @@ function SalesListInner() {
   const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
-  const filteredSales = useMemo(
-    () => (filter === "all" ? sales : sales.filter((s) => s.channel === filter)),
-    [sales, filter],
-  );
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    for (const s of sales) {
+      const y = parseInt(s.occurredOn.slice(0, 4), 10);
+      if (!Number.isNaN(y)) set.add(y);
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [sales]);
+
+  const filteredSales = useMemo(() => {
+    let result = sales;
+    if (filter !== "all") result = result.filter((s) => s.channel === filter);
+    if (year !== ALL_YEARS) {
+      result = result.filter(
+        (s) => parseInt(s.occurredOn.slice(0, 4), 10) === year,
+      );
+    }
+    return result;
+  }, [sales, filter, year]);
 
   async function refresh() {
     const [s, p] = await Promise.all([
@@ -105,7 +139,37 @@ function SalesListInner() {
         </p>
       </div>
 
-      <div>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-zinc-600">表示期間</span>
+          <button
+            type="button"
+            onClick={() => setYear(ALL_YEARS)}
+            className={
+              "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
+              (year === ALL_YEARS
+                ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
+                : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+            }
+          >
+            全期間
+          </button>
+          {availableYears.map((y) => (
+            <button
+              type="button"
+              key={y}
+              onClick={() => setYear(y)}
+              className={
+                "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
+                (year === y
+                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+              }
+            >
+              {y}年
+            </button>
+          ))}
+        </div>
         <label className="block">
           <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
             カテゴリで絞り込み

@@ -430,7 +430,11 @@ export default function DashboardPage() {
             return (
               <Link
                 key={ch}
-                href={`/sales/list?category=${ch}`}
+                href={
+                  year === ALL_YEARS
+                    ? `/sales/list?category=${ch}`
+                    : `/sales/list?category=${ch}&year=${year}`
+                }
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -474,7 +478,11 @@ export default function DashboardPage() {
             return (
               <Link
                 key={cat}
-                href={`/expenses/list?category=${cat}`}
+                href={
+                  year === ALL_YEARS
+                    ? `/expenses/list?category=${cat}`
+                    : `/expenses/list?category=${cat}&year=${year}`
+                }
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
