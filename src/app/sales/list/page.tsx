@@ -6,6 +6,7 @@ import {
   deleteSale,
   listProductsWithVariants,
   listSales,
+  updateOnlineOrder,
   updateSale,
   type UpdateSaleInput,
 } from "@/lib/repo";
@@ -286,15 +287,13 @@ function SalesListInner() {
                     )}
                   </div>
                   <div className="flex gap-1.5">
-                    {!isMultiItem && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingSale(s)}
-                        className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
-                      >
-                        編集
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEditingSale(s)}
+                      className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
+                    >
+                      編集
+                    </button>
                     <button
                       type="button"
                       onClick={() => setDeletingSale(s)}
@@ -342,6 +341,38 @@ function SalesListInner() {
 }
 
 function EditSaleModal({
+  sale,
+  products,
+  onClose,
+  onDone,
+}: {
+  sale: Sale;
+  products: ProductWithVariants[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  // 複数商品オーダーは編集できるフィールドが限定されるため別モーダル
+  if (sale.items && sale.items.length > 0) {
+    return (
+      <EditOrderModal
+        sale={sale}
+        products={products}
+        onClose={onClose}
+        onDone={onDone}
+      />
+    );
+  }
+  return (
+    <EditSingleSaleModal
+      sale={sale}
+      products={products}
+      onClose={onClose}
+      onDone={onDone}
+    />
+  );
+}
+
+function EditSingleSaleModal({
   sale,
   products,
   onClose,
@@ -697,6 +728,167 @@ function DeleteSaleModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 複数商品オーダー編集モーダル: 日付・合計金額・メモのみ編集可能
+function EditOrderModal({
+  sale,
+  products,
+  onClose,
+  onDone,
+}: {
+  sale: Sale;
+  products: ProductWithVariants[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [occurredOn, setOccurredOn] = useState(sale.occurredOn);
+  const [amount, setAmount] = useState<number | "">(sale.amount);
+  const [memo, setMemo] = useState(sale.memo ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  const theme = CHANNEL_THEME[sale.channel];
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (amount === "" || Number(amount) <= 0) {
+      setError("合計金額を入力してください");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updateOnlineOrder(sale.id, {
+        occurredOn,
+        amount: Number(amount),
+        memo: memo.trim() || null,
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-zinc-900/50 p-4 backdrop-blur-sm sm:items-center">
+      <form
+        onSubmit={onSubmit}
+        className="my-4 w-full max-w-lg space-y-4 rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+      >
+        <header className="flex items-center gap-3">
+          <div
+            className={
+              "flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-2xl shadow " +
+              theme.gradient
+            }
+          >
+            {theme.emoji}
+          </div>
+          <div>
+            <div className="text-lg font-extrabold text-zinc-900">
+              注文を編集
+            </div>
+            <div className="text-xs text-zinc-500">
+              {sale.items!.length}商品のオーダー
+            </div>
+          </div>
+        </header>
+
+        {/* 商品リストは readonly */}
+        <div className="rounded-xl bg-zinc-50 p-3">
+          <div className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            含まれる商品 (変更不可)
+          </div>
+          <ul className="space-y-1 text-sm text-zinc-800">
+            {sale.items!.map((it, i) => {
+              const p = productMap.get(it.productId);
+              const v = p
+                ? p.variants.find((vv) => vv.id === it.variantId)
+                : null;
+              const label = v
+                ? [v.color, v.size].filter((x) => x && x !== "-").join("/")
+                : "";
+              return (
+                <li key={i} className="flex justify-between">
+                  <span>
+                    {p ? p.name : "(削除済み商品)"}
+                    {label && ` (${label})`}
+                  </span>
+                  <span className="font-semibold">×{it.quantity}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-500">
+            商品の変更は削除→再登録で対応してください
+          </p>
+        </div>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">日付</div>
+          <input
+            type="date"
+            value={occurredOn}
+            onChange={(e) => setOccurredOn(e.target.value)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+          />
+        </label>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">
+            合計金額 (円)
+          </div>
+          <input
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(e) =>
+              setAmount(e.target.value === "" ? "" : Number(e.target.value))
+            }
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-lg font-bold outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+          />
+        </label>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">
+            メモ (任意)
+          </div>
+          <input
+            type="text"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+          />
+        </label>
+
+        {error && (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-base font-bold text-white shadow-lg disabled:opacity-50"
+          >
+            {submitting ? "保存中…" : "保存"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-700"
+          >
+            キャンセル
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

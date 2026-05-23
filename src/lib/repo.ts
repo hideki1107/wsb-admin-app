@@ -522,6 +522,25 @@ export interface UpdateSaleInput {
   memo?: string | null;
 }
 
+// 複数商品オーダー (items[]) の編集。items 自体は変更せず、
+// 日付・合計金額・メモのみ更新する (在庫の再計算は不要)
+export interface UpdateOnlineOrderInput {
+  occurredOn: string;
+  amount: number;
+  memo?: string | null;
+}
+
+export async function updateOnlineOrder(
+  saleId: string,
+  next: UpdateOnlineOrderInput,
+): Promise<void> {
+  await updateDoc(doc(db, "sales", saleId), {
+    occurredOn: next.occurredOn,
+    amount: next.amount,
+    memo: next.memo ?? null,
+  });
+}
+
 export async function updateSale(
   oldSale: Sale,
   next: UpdateSaleInput,
