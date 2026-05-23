@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   deleteSale,
   listProductsWithVariants,
@@ -21,14 +22,36 @@ const REQUIRES_VARIANT: SalesChannel[] = ["venue", "online"];
 
 type ChannelFilter = SalesChannel | "all";
 
+function parseFilter(raw: string | null): ChannelFilter {
+  if (!raw) return "all";
+  if ((SALES_CHANNELS as string[]).includes(raw)) return raw as SalesChannel;
+  return "all";
+}
+
 export default function SalesListPage() {
+  return (
+    <Suspense fallback={<p className="text-center text-base text-zinc-500">読み込み中…</p>}>
+      <SalesListInner />
+    </Suspense>
+  );
+}
+
+function SalesListInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const filter = parseFilter(searchParams.get("category"));
+
+  function setFilter(next: ChannelFilter) {
+    const url = next === "all" ? "/sales/list" : `/sales/list?category=${next}`;
+    router.replace(url, { scroll: false });
+  }
+
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingSale, setDeletingSale] = useState<Sale | null>(null);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
-  const [filter, setFilter] = useState<ChannelFilter>("all");
 
   const filteredSales = useMemo(
     () => (filter === "all" ? sales : sales.filter((s) => s.channel === filter)),

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   deleteExpense,
   listExpenses,
@@ -17,13 +18,37 @@ import { yen } from "@/lib/format";
 
 type CategoryFilter = ExpenseCategory | "all";
 
+function parseFilter(raw: string | null): CategoryFilter {
+  if (!raw) return "all";
+  if ((EXPENSE_CATEGORIES as string[]).includes(raw))
+    return raw as ExpenseCategory;
+  return "all";
+}
+
 export default function ExpensesListPage() {
+  return (
+    <Suspense fallback={<p className="text-center text-base text-zinc-500">読み込み中…</p>}>
+      <ExpensesListInner />
+    </Suspense>
+  );
+}
+
+function ExpensesListInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const filter = parseFilter(searchParams.get("category"));
+
+  function setFilter(next: CategoryFilter) {
+    const url =
+      next === "all" ? "/expenses/list" : `/expenses/list?category=${next}`;
+    router.replace(url, { scroll: false });
+  }
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [filter, setFilter] = useState<CategoryFilter>("all");
 
   const filteredExpenses = useMemo(
     () =>

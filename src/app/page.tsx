@@ -430,7 +430,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={ch}
-                href="/sales/list"
+                href={`/sales/list?category=${ch}`}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -474,7 +474,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={cat}
-                href="/expenses/list"
+                href={`/expenses/list?category=${cat}`}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
