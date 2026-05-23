@@ -34,6 +34,7 @@ import type {
   ProductVariant,
   ProductWithVariants,
   Sale,
+  SaleItem,
   SalesChannel,
   StockMovement,
 } from "./types";
@@ -84,6 +85,7 @@ const saleFromDoc = (snap: QueryDocumentSnapshot<DocumentData>): Sale => {
     productId: d.productId ?? null,
     variantId: d.variantId ?? null,
     quantity: d.quantity ?? 1,
+    items: Array.isArray(d.items) ? (d.items as SaleItem[]) : null,
     amount: d.amount ?? 0,
     memo: d.memo ?? null,
     createdBy: d.createdBy ?? null,
@@ -354,6 +356,78 @@ export async function listSales(opts?: {
   });
 }
 
+// 通販で複数商品を含む 1 注文を登録する。
+// sales コレクションに 1 ドキュメント (items[] 付き、amount = 合計金額)
+// 在庫は items 各行の variant に対して transaction で減算
+export interface CreateOnlineOrderInput {
+  occurredOn: string;
+  items: SaleItem[];
+  amount: number;
+  memo?: string | null;
+  createdBy?: string | null;
+}
+
+export async function recordOnlineOrder(
+  input: CreateOnlineOrderInput,
+): Promise<string> {
+  if (input.items.length === 0)
+    throw new Error("商品が指定されていません");
+
+  return await runTransaction(db, async (tx) => {
+    // 同じ variant への減算を集約
+    const stockDeltas = new Map<string, number>();
+    const refByPath = new Map<string, DocumentReference>();
+    for (const item of input.items) {
+      const ref = doc(
+        db,
+        "products",
+        item.productId,
+        "variants",
+        item.variantId,
+      );
+      refByPath.set(ref.path, ref);
+      stockDeltas.set(
+        ref.path,
+        (stockDeltas.get(ref.path) ?? 0) + item.quantity,
+      );
+    }
+
+    // 全 variant を読み込み
+    const reads = await Promise.all(
+      Array.from(refByPath.values()).map((ref) => tx.get(ref)),
+    );
+    const currentStocks = new Map<string, number>();
+    for (const snap of reads) {
+      if (!snap.exists())
+        throw new Error("対象のバリエーションが見つかりません");
+      currentStocks.set(snap.ref.path, snap.data().stock ?? 0);
+    }
+
+    // 在庫を一括更新
+    for (const [path, delta] of stockDeltas.entries()) {
+      const ref = refByPath.get(path)!;
+      const cur = currentStocks.get(path) ?? 0;
+      tx.update(ref, { stock: cur - delta });
+    }
+
+    // sales ドキュメント1件作成 (items[] 付き)
+    const saleRef = doc(collection(db, "sales"));
+    tx.set(saleRef, {
+      occurredOn: input.occurredOn,
+      channel: "online",
+      productId: null,
+      variantId: null,
+      quantity: input.items.reduce((s, i) => s + i.quantity, 0),
+      items: input.items,
+      amount: input.amount,
+      memo: input.memo ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: serverTimestamp(),
+    });
+    return saleRef.id;
+  });
+}
+
 // 物販系収入で複数商品を一括登録する。
 // 全行の在庫減算 + sales 作成を 1 transaction で行う。
 // 同じ variant が複数行に出てくる場合も合算して減算。
@@ -514,23 +588,62 @@ export async function updateSale(
 }
 
 // 売上を削除。物販に紐づく場合は variant の在庫を復元する (transaction)
+// items[] がある場合は各 variant にそれぞれ復元する
 export async function deleteSale(sale: Sale): Promise<void> {
   await runTransaction(db, async (tx) => {
     const saleRef = doc(db, "sales", sale.id);
-    if (sale.variantId && sale.productId) {
-      const variantRef = doc(
+
+    // 復元対象を収集 (同じvariantは合算)
+    const restoreDeltas = new Map<string, number>();
+    const refByPath = new Map<string, DocumentReference>();
+
+    if (sale.items && sale.items.length > 0) {
+      for (const item of sale.items) {
+        const ref = doc(
+          db,
+          "products",
+          item.productId,
+          "variants",
+          item.variantId,
+        );
+        refByPath.set(ref.path, ref);
+        restoreDeltas.set(
+          ref.path,
+          (restoreDeltas.get(ref.path) ?? 0) + item.quantity,
+        );
+      }
+    } else if (sale.variantId && sale.productId) {
+      const ref = doc(
         db,
         "products",
         sale.productId,
         "variants",
         sale.variantId,
       );
-      const variantSnap = await tx.get(variantRef);
-      if (variantSnap.exists()) {
-        const currentStock: number = variantSnap.data().stock ?? 0;
-        tx.update(variantRef, { stock: currentStock + sale.quantity });
+      refByPath.set(ref.path, ref);
+      restoreDeltas.set(ref.path, sale.quantity);
+    }
+
+    // 読み込み (transactionでは reads first)
+    const reads = await Promise.all(
+      Array.from(refByPath.values()).map((ref) => tx.get(ref)),
+    );
+    const currentStocks = new Map<string, number>();
+    for (const snap of reads) {
+      if (snap.exists()) {
+        currentStocks.set(snap.ref.path, snap.data().stock ?? 0);
       }
     }
+
+    // 在庫復元
+    for (const [path, delta] of restoreDeltas.entries()) {
+      const ref = refByPath.get(path)!;
+      const cur = currentStocks.get(path);
+      if (cur !== undefined) {
+        tx.update(ref, { stock: cur + delta });
+      }
+    }
+
     tx.delete(saleRef);
   });
 }

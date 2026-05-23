@@ -118,13 +118,24 @@ export interface ProductWithVariants extends Product {
   variants: ProductVariant[];
 }
 
+// 1注文に複数商品が含まれるケース (通販で複数選択時) の各商品行
+export interface SaleItem {
+  productId: string;
+  variantId: string;
+  quantity: number;
+}
+
 export interface Sale {
   id: string;
   occurredOn: string;
   channel: SalesChannel;
+  // 単一商品時 (会場物販/通販1点/非物販時)
   productId?: string | null;
   variantId?: string | null;
   quantity: number;
+  // 複数商品時 (通販で2点以上) - 設定されていれば items を優先表示
+  items?: SaleItem[] | null;
+  // amount は注文全体の合計
   amount: number;
   memo?: string | null;
   createdBy?: string | null;

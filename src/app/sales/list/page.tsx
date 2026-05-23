@@ -201,12 +201,29 @@ function SalesListInner() {
       ) : (
         <ul className="space-y-2.5">
           {filteredSales.map((s) => {
+            const isMultiItem = !!s.items && s.items.length > 0;
             const product = s.productId ? productMap.get(s.productId) : null;
             const variant =
               product && s.variantId
                 ? product.variants.find((v) => v.id === s.variantId)
                 : null;
             const t = CHANNEL_THEME[s.channel];
+
+            // 複数商品の場合の表示名一覧
+            const itemLines: string[] = isMultiItem
+              ? s.items!.map((it) => {
+                  const p = productMap.get(it.productId);
+                  if (!p) return `(削除済み商品) ×${it.quantity}`;
+                  const v = p.variants.find((vv) => vv.id === it.variantId);
+                  const label = v
+                    ? [v.color, v.size]
+                        .filter((x) => x && x !== "-")
+                        .join("/")
+                    : "";
+                  return `${p.name}${label ? ` (${label})` : ""} ×${it.quantity}`;
+                })
+              : [];
+
             return (
               <li
                 key={s.id}
@@ -230,14 +247,29 @@ function SalesListInner() {
                       {t.label}
                     </span>
                     <span className="text-zinc-500">{s.occurredOn}</span>
+                    {isMultiItem && (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
+                        {s.items!.length}商品
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-1 text-base font-semibold text-zinc-900 sm:text-lg">
-                    {product ? product.name : "—"}
-                    {variant &&
-                      ` (${[variant.color, variant.size]
-                        .filter((x) => x && x !== "-")
-                        .join("/")})`}
-                  </div>
+                  {isMultiItem ? (
+                    <ul className="mt-1 space-y-0.5 text-base font-semibold text-zinc-900 sm:text-lg">
+                      {itemLines.map((line, i) => (
+                        <li key={i} className="leading-tight">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="mt-1 text-base font-semibold text-zinc-900 sm:text-lg">
+                      {product ? product.name : "—"}
+                      {variant &&
+                        ` (${[variant.color, variant.size]
+                          .filter((x) => x && x !== "-")
+                          .join("/")})`}
+                    </div>
+                  )}
                   {s.memo && (
                     <div className="mt-0.5 truncate text-sm text-zinc-500">
                       {s.memo}
@@ -249,18 +281,20 @@ function SalesListInner() {
                     <div className="text-xl font-bold text-zinc-900 sm:text-2xl">
                       {yen(s.amount)}
                     </div>
-                    {s.quantity > 1 && (
+                    {!isMultiItem && s.quantity > 1 && (
                       <div className="text-sm text-zinc-500">×{s.quantity}</div>
                     )}
                   </div>
                   <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditingSale(s)}
-                      className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
-                    >
-                      編集
-                    </button>
+                    {!isMultiItem && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSale(s)}
+                        className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
+                      >
+                        編集
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setDeletingSale(s)}
@@ -595,7 +629,11 @@ function DeleteSaleModal({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const restoresStock = !!sale.variantId && !!sale.productId;
+  const isMultiItem = !!sale.items && sale.items.length > 0;
+  const restoresStock = isMultiItem || (!!sale.variantId && !!sale.productId);
+  const restoreTotalQty = isMultiItem
+    ? sale.items!.reduce((sum, i) => sum + i.quantity, 0)
+    : sale.quantity;
 
   async function handleDelete() {
     setSubmitting(true);
@@ -625,7 +663,8 @@ function DeleteSaleModal({
             {restoresStock && (
               <>
                 <br />
-                在庫を {sale.quantity} 個 復元します。
+                在庫を{isMultiItem ? `合計 ${restoreTotalQty}` : restoreTotalQty}
+                個 復元します。
               </>
             )}
             <br />
