@@ -424,11 +424,17 @@ export default function SalesEntryPage() {
                       className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                     >
                       <option value="">選択してください</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({yen(p.basePrice)})
-                        </option>
-                      ))}
+                      {products.map((p) => {
+                        const totalStock = p.variants.reduce(
+                          (s, v) => s + v.stock,
+                          0,
+                        );
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (残{totalStock}個)
+                          </option>
+                        );
+                      })}
                     </select>
                   </label>
 
