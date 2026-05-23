@@ -354,6 +354,82 @@ export async function listSales(opts?: {
   });
 }
 
+// 売上を編集。物販の場合は旧/新の在庫差分を一括 transaction で再計算する
+export interface UpdateSaleInput {
+  occurredOn: string;
+  channel: SalesChannel;
+  productId?: string | null;
+  variantId?: string | null;
+  quantity: number;
+  amount: number;
+  memo?: string | null;
+}
+
+export async function updateSale(
+  oldSale: Sale,
+  next: UpdateSaleInput,
+): Promise<void> {
+  await runTransaction(db, async (tx) => {
+    const saleRef = doc(db, "sales", oldSale.id);
+
+    // 旧 variant の在庫を巻き戻し、新 variant の在庫を減算
+    const oldVariantRef =
+      oldSale.variantId && oldSale.productId
+        ? doc(
+            db,
+            "products",
+            oldSale.productId,
+            "variants",
+            oldSale.variantId,
+          )
+        : null;
+    const newVariantRef =
+      next.variantId && next.productId
+        ? doc(db, "products", next.productId, "variants", next.variantId)
+        : null;
+
+    if (
+      oldVariantRef &&
+      newVariantRef &&
+      oldVariantRef.path === newVariantRef.path
+    ) {
+      // 同じ variant: net 差分のみ適用 (+oldQty -newQty)
+      const snap = await tx.get(oldVariantRef);
+      if (snap.exists()) {
+        const cur: number = snap.data().stock ?? 0;
+        tx.update(oldVariantRef, {
+          stock: cur + oldSale.quantity - next.quantity,
+        });
+      }
+    } else {
+      if (oldVariantRef) {
+        const snap = await tx.get(oldVariantRef);
+        if (snap.exists()) {
+          const cur: number = snap.data().stock ?? 0;
+          tx.update(oldVariantRef, { stock: cur + oldSale.quantity });
+        }
+      }
+      if (newVariantRef) {
+        const snap = await tx.get(newVariantRef);
+        if (snap.exists()) {
+          const cur: number = snap.data().stock ?? 0;
+          tx.update(newVariantRef, { stock: cur - next.quantity });
+        }
+      }
+    }
+
+    tx.update(saleRef, {
+      occurredOn: next.occurredOn,
+      channel: next.channel,
+      productId: next.productId ?? null,
+      variantId: next.variantId ?? null,
+      quantity: next.quantity,
+      amount: next.amount,
+      memo: next.memo ?? null,
+    });
+  });
+}
+
 // 売上を削除。物販に紐づく場合は variant の在庫を復元する (transaction)
 export async function deleteSale(sale: Sale): Promise<void> {
   await runTransaction(db, async (tx) => {
@@ -413,6 +489,25 @@ export async function listExpenses(opts?: {
     if (a.occurredOn !== b.occurredOn)
       return a.occurredOn < b.occurredOn ? 1 : -1;
     return b.createdAt - a.createdAt;
+  });
+}
+
+export interface UpdateExpenseInput {
+  occurredOn: string;
+  category: ExpenseCategory;
+  amount: number;
+  memo?: string | null;
+}
+
+export async function updateExpense(
+  expenseId: string,
+  next: UpdateExpenseInput,
+): Promise<void> {
+  await updateDoc(doc(db, "expenses", expenseId), {
+    occurredOn: next.occurredOn,
+    category: next.category,
+    amount: next.amount,
+    memo: next.memo ?? null,
   });
 }
 

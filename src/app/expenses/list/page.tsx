@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { deleteExpense, listExpenses } from "@/lib/repo";
-import { type Expense } from "@/lib/types";
+import { useState, useEffect } from "react";
+import {
+  deleteExpense,
+  listExpenses,
+  updateExpense,
+  type UpdateExpenseInput,
+} from "@/lib/repo";
+import {
+  EXPENSE_CATEGORIES,
+  type Expense,
+  type ExpenseCategory,
+} from "@/lib/types";
 import { EXPENSE_THEME } from "@/lib/theme";
 import { yen } from "@/lib/format";
 
@@ -11,6 +20,7 @@ export default function ExpensesListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   async function refresh() {
     setExpenses(await listExpenses());
@@ -95,19 +105,38 @@ export default function ExpensesListPage() {
                   <div className="text-xl font-bold text-rose-600 sm:text-2xl">
                     -{yen(e.amount)}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDeletingExpense(e)}
-                    className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 active:scale-95"
-                    aria-label="削除"
-                  >
-                    削除
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingExpense(e)}
+                      className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 active:scale-95"
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingExpense(e)}
+                      className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 active:scale-95"
+                    >
+                      削除
+                    </button>
+                  </div>
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          onClose={() => setEditingExpense(null)}
+          onDone={async () => {
+            setEditingExpense(null);
+            await refresh();
+          }}
+        />
       )}
 
       {deletingExpense && (
@@ -120,6 +149,161 @@ export default function ExpensesListPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function EditExpenseModal({
+  expense,
+  onClose,
+  onDone,
+}: {
+  expense: Expense;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [category, setCategory] = useState<ExpenseCategory>(expense.category);
+  const [occurredOn, setOccurredOn] = useState(expense.occurredOn);
+  const [amount, setAmount] = useState<number | "">(expense.amount);
+  const [memo, setMemo] = useState(expense.memo ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const theme = EXPENSE_THEME[category];
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (amount === "" || Number(amount) <= 0) {
+      setError("金額を入力してください");
+      return;
+    }
+    const input: UpdateExpenseInput = {
+      occurredOn,
+      category,
+      amount: Number(amount),
+      memo: memo.trim() || null,
+    };
+    setSubmitting(true);
+    try {
+      await updateExpense(expense.id, input);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-zinc-900/50 p-4 backdrop-blur-sm sm:items-center">
+      <form
+        onSubmit={onSubmit}
+        className="my-4 w-full max-w-md space-y-4 rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+      >
+        <header className="flex items-center gap-3">
+          <div
+            className={
+              "flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-2xl shadow " +
+              theme.gradient
+            }
+          >
+            {theme.emoji}
+          </div>
+          <div>
+            <div className="text-lg font-extrabold text-zinc-900">
+              支出を編集
+            </div>
+            <div className="text-xs text-zinc-500">{expense.occurredOn}</div>
+          </div>
+        </header>
+
+        <div>
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">カテゴリ</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {EXPENSE_CATEGORIES.map((cat) => {
+              const t = EXPENSE_THEME[cat];
+              const active = category === cat;
+              return (
+                <button
+                  type="button"
+                  key={cat}
+                  onClick={() => setCategory(cat)}
+                  className={
+                    "rounded-xl px-2 py-2.5 text-sm font-medium transition " +
+                    (active
+                      ? "bg-gradient-to-br text-white shadow scale-105 " +
+                        t.gradient
+                      : "bg-white text-zinc-700 ring-1 ring-zinc-200")
+                  }
+                >
+                  <div className="text-lg">{t.emoji}</div>
+                  <div className="text-xs">{t.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">日付</div>
+          <input
+            type="date"
+            value={occurredOn}
+            onChange={(e) => setOccurredOn(e.target.value)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+          />
+        </label>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">
+            金額 (円)
+          </div>
+          <input
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(e) =>
+              setAmount(e.target.value === "" ? "" : Number(e.target.value))
+            }
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-lg font-bold outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+          />
+        </label>
+
+        <label className="block">
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">
+            メモ (任意)
+          </div>
+          <input
+            type="text"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+          />
+        </label>
+
+        {error && (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-base font-bold text-white shadow-lg disabled:opacity-50"
+          >
+            {submitting ? "保存中…" : "保存"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-700"
+          >
+            キャンセル
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
