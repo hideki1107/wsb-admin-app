@@ -428,10 +428,11 @@ export default function DashboardPage() {
             const t = CHANNEL_THEME[ch];
             const s = channelTotals.get(ch);
             return (
-              <div
+              <Link
                 key={ch}
+                href="/sales/list"
                 className={
-                  "rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl sm:p-5 " +
+                  "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
                 }
               >
@@ -452,7 +453,7 @@ export default function DashboardPage() {
                 <div className={"mt-1 text-sm " + t.text}>
                   {s?.count ?? 0} 件
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -471,10 +472,11 @@ export default function DashboardPage() {
             const t = EXPENSE_THEME[cat];
             const s = categoryTotals.get(cat);
             return (
-              <div
+              <Link
                 key={cat}
+                href="/expenses/list"
                 className={
-                  "rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl sm:p-5 " +
+                  "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
                 }
               >
@@ -495,7 +497,7 @@ export default function DashboardPage() {
                 <div className={"mt-1 text-sm " + t.text}>
                   {s?.count ?? 0} 件
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
