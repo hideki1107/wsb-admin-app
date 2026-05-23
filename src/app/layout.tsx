@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthGate } from "@/lib/AuthGate";
@@ -15,8 +15,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WSB 物販・経理",
-  description: "WSB バンドの物販・売上・在庫管理アプリ",
+  title: "WSB管理",
+  description: "WSB バンドの物販・収入支出・在庫管理アプリ",
+  manifest: "/manifest.json",
+  applicationName: "WSB管理",
+  appleWebApp: {
+    capable: true,
+    title: "WSB管理",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icon-180.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#7c3aed",
+  width: "device-width",
+  initialScale: 1,
+  // ホーム画面起動時にステータスバーやノッチを避ける
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

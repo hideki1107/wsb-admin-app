@@ -1,0 +1,26 @@
+{
+  "name": "WSB 物販・経理",
+  "short_name": "WSB管理",
+  "description": "WSB バンドの物販・収入支出・在庫管理アプリ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf5ff",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

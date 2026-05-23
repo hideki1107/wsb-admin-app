@@ -24,6 +24,7 @@
     "eslint-config-next": "16.2.6",
     "firebase-admin": "^13.10.0",
     "google-auth-library": "^10.6.2",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
     "typescript": "^5"
