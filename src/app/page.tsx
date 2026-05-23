@@ -278,72 +278,140 @@ export default function DashboardPage() {
             データなし
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl bg-white shadow-lg ring-1 ring-zinc-100">
-            <table className="w-full text-sm sm:text-base">
-              <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-left">
-                  <th className="sticky left-0 z-10 bg-zinc-50 px-3 py-3 font-semibold text-zinc-600 sm:px-4">
-                    月
-                  </th>
-                  {SALES_CHANNELS.map((ch) => (
-                    <th
-                      key={ch}
-                      className="px-3 py-3 text-right font-semibold sm:px-4"
-                    >
-                      <span className={CHANNEL_THEME[ch].text}>
-                        {CHANNEL_THEME[ch].emoji} {CHANNEL_THEME[ch].label}
-                      </span>
-                    </th>
-                  ))}
-                  <th className="px-3 py-3 text-right font-semibold text-rose-600 sm:px-4">
-                    💸 支出計
-                  </th>
-                  <th className="px-3 py-3 text-right font-semibold text-zinc-900 sm:px-4">
-                    月次収支
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyRows.map((row) => {
-                  const net = row.incomeTotal - row.expenseTotal;
-                  return (
-                    <tr
-                      key={row.ym}
-                      className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50"
-                    >
-                      <td className="sticky left-0 z-10 bg-white px-3 py-3 font-bold text-zinc-700 sm:px-4">
+          <>
+            {/* ===== モバイル: カード形式 ===== */}
+            <div className="space-y-3 lg:hidden">
+              {monthlyRows.map((row) => {
+                const net = row.incomeTotal - row.expenseTotal;
+                return (
+                  <div
+                    key={row.ym}
+                    className="overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-zinc-100"
+                  >
+                    <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-3">
+                      <div className="text-base font-extrabold text-zinc-900">
                         {row.ym}
-                      </td>
-                      {SALES_CHANNELS.map((ch) => (
-                        <td
-                          key={ch}
-                          className="px-3 py-3 text-right tabular-nums text-zinc-700 sm:px-4"
-                        >
-                          {row.byChannel[ch]
-                            ? yen(row.byChannel[ch])
-                            : <span className="text-zinc-300">-</span>}
-                        </td>
-                      ))}
-                      <td className="px-3 py-3 text-right tabular-nums text-rose-600 sm:px-4">
-                        {row.expenseTotal
-                          ? `-${yen(row.expenseTotal)}`
-                          : <span className="text-zinc-300">-</span>}
-                      </td>
-                      <td
+                      </div>
+                      <div
                         className={
-                          "px-3 py-3 text-right text-base font-bold tabular-nums sm:px-4 sm:text-lg " +
+                          "text-xl font-extrabold tabular-nums " +
                           (net >= 0 ? "text-emerald-700" : "text-rose-700")
                         }
                       >
                         {net >= 0 ? "+" : ""}
                         {yen(net)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+                    <ul className="divide-y divide-zinc-100">
+                      {SALES_CHANNELS.map((ch) => {
+                        const v = row.byChannel[ch];
+                        if (!v) return null;
+                        const t = CHANNEL_THEME[ch];
+                        return (
+                          <li
+                            key={ch}
+                            className="flex items-center justify-between px-4 py-2"
+                          >
+                            <span
+                              className={
+                                "flex items-center gap-1.5 text-sm font-semibold " +
+                                t.text
+                              }
+                            >
+                              <span>{t.emoji}</span>
+                              <span>{t.label}</span>
+                            </span>
+                            <span className="text-base font-bold tabular-nums text-zinc-900">
+                              {yen(v)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {row.expenseTotal > 0 && (
+                        <li className="flex items-center justify-between px-4 py-2">
+                          <span className="flex items-center gap-1.5 text-sm font-semibold text-rose-600">
+                            <span>💸</span>
+                            <span>支出計</span>
+                          </span>
+                          <span className="text-base font-bold tabular-nums text-rose-600">
+                            -{yen(row.expenseTotal)}
+                          </span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ===== デスクトップ: テーブル形式 ===== */}
+            <div className="hidden overflow-x-auto rounded-2xl bg-white shadow-lg ring-1 ring-zinc-100 lg:block">
+              <table className="w-full text-sm sm:text-base">
+                <thead>
+                  <tr className="border-b border-zinc-200 bg-zinc-50 text-left">
+                    <th className="sticky left-0 z-10 bg-zinc-50 px-3 py-3 font-semibold text-zinc-600 sm:px-4">
+                      月
+                    </th>
+                    {SALES_CHANNELS.map((ch) => (
+                      <th
+                        key={ch}
+                        className="px-3 py-3 text-right font-semibold sm:px-4"
+                      >
+                        <span className={CHANNEL_THEME[ch].text}>
+                          {CHANNEL_THEME[ch].emoji} {CHANNEL_THEME[ch].label}
+                        </span>
+                      </th>
+                    ))}
+                    <th className="px-3 py-3 text-right font-semibold text-rose-600 sm:px-4">
+                      💸 支出計
+                    </th>
+                    <th className="px-3 py-3 text-right font-semibold text-zinc-900 sm:px-4">
+                      月次収支
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyRows.map((row) => {
+                    const net = row.incomeTotal - row.expenseTotal;
+                    return (
+                      <tr
+                        key={row.ym}
+                        className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50"
+                      >
+                        <td className="sticky left-0 z-10 bg-white px-3 py-3 font-bold text-zinc-700 sm:px-4">
+                          {row.ym}
+                        </td>
+                        {SALES_CHANNELS.map((ch) => (
+                          <td
+                            key={ch}
+                            className="px-3 py-3 text-right tabular-nums text-zinc-700 sm:px-4"
+                          >
+                            {row.byChannel[ch]
+                              ? yen(row.byChannel[ch])
+                              : <span className="text-zinc-300">-</span>}
+                          </td>
+                        ))}
+                        <td className="px-3 py-3 text-right tabular-nums text-rose-600 sm:px-4">
+                          {row.expenseTotal
+                            ? `-${yen(row.expenseTotal)}`
+                            : <span className="text-zinc-300">-</span>}
+                        </td>
+                        <td
+                          className={
+                            "px-3 py-3 text-right text-base font-bold tabular-nums sm:px-4 sm:text-lg " +
+                            (net >= 0 ? "text-emerald-700" : "text-rose-700")
+                          }
+                        >
+                          {net >= 0 ? "+" : ""}
+                          {yen(net)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

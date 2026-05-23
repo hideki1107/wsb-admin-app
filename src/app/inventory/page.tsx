@@ -107,10 +107,23 @@ export default function InventoryPage() {
                   <div className="text-sm text-zinc-500">
                     {PRODUCT_CATEGORY_LABELS[p.category]} ・ {yen(p.basePrice)}
                   </div>
-                  <div className="mt-1 text-sm text-zinc-500">
-                    合計{" "}
-                    <span className="font-bold text-zinc-900">{total}</span>{" "}
-                    個
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      合計
+                    </span>
+                    <span
+                      className={
+                        "text-3xl sm:text-4xl font-black tabular-nums leading-none " +
+                        (total === 0
+                          ? "text-rose-600"
+                          : total <= 5
+                            ? "text-amber-600"
+                            : "text-emerald-700")
+                      }
+                    >
+                      {total}
+                    </span>
+                    <span className="text-sm text-zinc-500">個</span>
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
@@ -141,29 +154,34 @@ export default function InventoryPage() {
                   return (
                     <li
                       key={v.id}
-                      className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4"
+                      className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4"
                     >
-                      <div className="text-base font-medium text-zinc-700">
+                      <div className="min-w-0 flex-1 text-base font-medium text-zinc-700 sm:text-lg">
                         {label}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                         <div
                           className={
-                            "rounded-full px-3.5 py-1.5 text-sm font-bold " +
+                            "flex min-w-[4.5rem] flex-col items-center justify-center rounded-2xl px-3 py-2 shadow-md ring-1 " +
                             (v.stock === 0
-                              ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white"
+                              ? "bg-gradient-to-br from-rose-500 to-pink-600 text-white ring-rose-200"
                               : v.stock <= 5
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-emerald-100 text-emerald-800")
+                                ? "bg-gradient-to-br from-amber-400 to-orange-500 text-white ring-amber-200"
+                                : "bg-gradient-to-br from-emerald-400 to-teal-500 text-white ring-emerald-200")
                           }
                         >
-                          残 {v.stock}
+                          <span className="text-3xl font-black leading-none tabular-nums sm:text-4xl">
+                            {v.stock}
+                          </span>
+                          <span className="mt-0.5 text-[10px] font-bold tracking-widest opacity-90">
+                            残個数
+                          </span>
                         </div>
                         <button
                           onClick={() =>
                             setEditing({ product: p, variant: v })
                           }
-                          className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50"
+                          className="rounded-full border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
                         >
                           入荷/補正
                         </button>
