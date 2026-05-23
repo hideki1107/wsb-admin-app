@@ -31,8 +31,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<YearFilter>(ALL_YEARS);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // 25秒で諦めてエラー表示 (デフォだと無限に "読み込み中..." になる事象対策)
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setError(
+          "Firestore からの応答が25秒以内に返ってきませんでした。ネットワークやFirebase設定を確認してください。",
+        );
+        setLoading(false);
+      }
+    }, 25_000);
+
     (async () => {
       try {
         const [s, e, p] = await Promise.all([
@@ -40,16 +53,32 @@ export default function DashboardPage() {
           listExpenses(),
           listProductsWithVariants(),
         ]);
+        if (cancelled) return;
         setSales(s);
         setExpenses(e);
         setProducts(p);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
         setLoading(false);
+      } catch (e) {
+        if (cancelled) return;
+        console.error("[dashboard load]", e);
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      } finally {
+        clearTimeout(timeoutId);
       }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [loadAttempt]);
+
+  function retry() {
+    setLoading(true);
+    setError(null);
+    setLoadAttempt((n) => n + 1);
+  }
 
   // 全データに含まれる年の一覧 (新しい順)
   const availableYears = useMemo(() => {
@@ -148,8 +177,15 @@ export default function DashboardPage() {
     );
   if (error)
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-base text-rose-700">
-        エラー: {error}
+      <div className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 p-5">
+        <p className="text-base text-rose-700">エラー: {error}</p>
+        <button
+          type="button"
+          onClick={retry}
+          className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-rose-700"
+        >
+          再試行
+        </button>
       </div>
     );
 

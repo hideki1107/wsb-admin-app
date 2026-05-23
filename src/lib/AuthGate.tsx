@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import type { User } from "firebase/auth";
 import { signInWithGoogle, signOut, watchAuth } from "./auth";
 import { isFirebaseConfigured } from "./firebase";
@@ -41,7 +43,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (!user) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-6 p-6 text-center">
-        <div className="text-6xl">🎸</div>
+        <Image
+          src="/icon-192.png"
+          alt="WSB"
+          width={96}
+          height={96}
+          priority
+          className="h-24 w-24 rounded-2xl shadow-lg"
+        />
         <h1 className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent">
           WSB 物販・経理
         </h1>
@@ -60,12 +69,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     <>
       <header className="border-b border-white/40 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center gap-2 text-base sm:text-lg">
-            <span className="text-2xl sm:text-3xl">🎸</span>
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-base sm:text-lg transition hover:opacity-80 active:opacity-60"
+            aria-label="ダッシュボードへ"
+          >
+            <Image
+              src="/icon-192.png"
+              alt="WSB"
+              width={36}
+              height={36}
+              priority
+              className="h-9 w-9 rounded-lg shadow-sm sm:h-10 sm:w-10"
+            />
             <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text font-extrabold text-transparent">
               WSB 物販・経理
             </span>
-          </div>
+          </Link>
           <div className="flex items-center gap-2 sm:gap-3 text-sm text-zinc-600">
             <span className="hidden sm:inline">
               {user.displayName ?? user.email}

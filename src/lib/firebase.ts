@@ -24,10 +24,10 @@ let _auth: Auth | null = null;
 
 if (isFirebaseConfigured) {
   _app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
-  // experimentalAutoDetectLongPolling: WebSocket がブロックされる環境
-  // (LINEなどアプリ内ブラウザ、社内プロキシ等) で long-polling に自動フォールバック
+  // モバイル/WebView/プロキシ環境でWebSocketが詰まる事象が散見されるため
+  // long-polling を強制 (auto-detect だと検出フェーズで20-30秒ハングすることがある)
   _db = initializeFirestore(_app, {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   });
   _auth = getAuth(_app);
 }
