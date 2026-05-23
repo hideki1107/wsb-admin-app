@@ -135,9 +135,17 @@ export const EXPENSE_THEME: Record<ExpenseCategory, Theme> = {
     text: "text-orange-700",
     badge: "bg-orange-100 text-orange-700",
   },
-  transport: {
-    emoji: "🚗",
-    label: "交通費",
+  studio: {
+    emoji: "🎙️",
+    label: "スタジオ代",
+    gradient: "from-stone-400 to-zinc-600",
+    ring: "ring-stone-200",
+    text: "text-stone-700",
+    badge: "bg-stone-100 text-stone-700",
+  },
+  shipping: {
+    emoji: "🚚",
+    label: "通販送料",
     gradient: "from-green-400 to-emerald-500",
     ring: "ring-green-200",
     text: "text-green-700",
@@ -158,14 +166,6 @@ export const EXPENSE_THEME: Record<ExpenseCategory, Theme> = {
     ring: "ring-yellow-200",
     text: "text-yellow-800",
     badge: "bg-yellow-100 text-yellow-800",
-  },
-  equipment: {
-    emoji: "🎛️",
-    label: "機材",
-    gradient: "from-stone-400 to-zinc-600",
-    ring: "ring-stone-200",
-    text: "text-stone-700",
-    badge: "bg-stone-100 text-stone-700",
   },
   other: {
     emoji: "📝",

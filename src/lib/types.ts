@@ -31,21 +31,21 @@ export const SALES_CHANNELS: SalesChannel[] = [
 export type ExpenseCategory =
   | "production"   // 制作費 (録音/MV/ジャケ等)
   | "staff"        // スタッフ・カメラマン代
-  | "venue"        // 会場費・スタジオ
-  | "transport"    // 交通費
+  | "venue"        // 会場費
+  | "studio"       // スタジオ代
+  | "shipping"     // 通販送料
   | "promo"        // 宣伝・広告費
   | "party"        // 打ち上げ
-  | "equipment"    // 機材
   | "other";       // その他
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   production: "制作費",
   staff: "スタッフ",
   venue: "会場費",
-  transport: "交通費",
+  studio: "スタジオ代",
+  shipping: "通販送料",
   promo: "宣伝",
   party: "打ち上げ",
-  equipment: "機材",
   other: "その他",
 };
 
@@ -53,10 +53,10 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "production",
   "staff",
   "venue",
-  "transport",
+  "studio",
+  "shipping",
   "promo",
   "party",
-  "equipment",
   "other",
 ];
 

@@ -47,10 +47,10 @@ type Category =
   | "production"
   | "staff"
   | "venue"
-  | "transport"
+  | "studio"
+  | "shipping"
   | "promo"
   | "party"
-  | "equipment"
   | "other";
 
 function categorize(detail: string): Category {
@@ -62,14 +62,20 @@ function categorize(detail: string): Category {
     t.includes("サポート")
   )
     return "staff";
-  if (t.includes("会場") || t.includes("スタジオ") || t.includes("ハウス"))
+  if (t.includes("スタジオ") || t.includes("リハ")) return "studio";
+  if (t.includes("会場") || t.includes("ハウス") || t.includes("ライブハウス"))
     return "venue";
-  if (t.includes("交通") || t.includes("ガソリン") || t.includes("電車"))
-    return "transport";
+  if (
+    t.includes("送料") ||
+    t.includes("発送") ||
+    t.includes("配送") ||
+    t.includes("メール便")
+  )
+    return "shipping";
   if (t.includes("宣伝") || t.includes("印刷") || t.includes("広告"))
     return "promo";
-  if (t.includes("機材") || t.includes("楽器")) return "equipment";
-  if (t.includes("録音") || t.includes("制作") || t.includes("MV")) return "production";
+  if (t.includes("録音") || t.includes("制作") || t.includes("MV"))
+    return "production";
   return "other";
 }
 
