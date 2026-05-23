@@ -147,12 +147,12 @@ export default function InventoryPage() {
               </header>
               <ul className="divide-y divide-zinc-100">
                 {p.variants.map((v) => {
-                  const label =
-                    v.color === "-" && v.size === "-"
-                      ? "標準"
-                      : [v.color, v.size]
-                          .filter((x) => x !== "-")
-                          .join(" / ");
+                  const isPlain = v.color === "-" && v.size === "-";
+                  const label = isPlain
+                    ? ""
+                    : [v.color, v.size]
+                        .filter((x) => x !== "-")
+                        .join(" / ");
                   return (
                     <li
                       key={v.id}
