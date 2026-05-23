@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// WSB 物販・経理アプリ Firestore セキュリティルール
+// MVP方針: 認証済みユーザーは全データ読み書き可能。
+// 本格運用前にメールホワイトリストに切り替えること。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

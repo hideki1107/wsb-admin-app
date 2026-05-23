@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+
+# Firebase service account (NEVER commit)
+serviceAccount.json
+*-firebase-adminsdk-*.json
 
 # vercel
 .vercel
@@ -39,3 +44,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Auto-installed Claude Code / Firebase tooling (not part of the app)
+.agents/
+skills-lock.json
