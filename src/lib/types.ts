@@ -7,7 +7,8 @@ export type SalesChannel =
   | "online"  // 通販
   | "live"    // ライブ利益
   | "music"   // 音源収入
-  | "ad";     // 広告収入
+  | "ad"      // 広告収入
+  | "deposit"; // 入金 (メンバーからの資金提供)
 
 export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = {
   venue: "会場物販",
@@ -15,6 +16,7 @@ export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = {
   live: "ライブ利益",
   music: "音源収入",
   ad: "広告収入",
+  deposit: "入金",
 };
 
 export const SALES_CHANNELS: SalesChannel[] = [
@@ -23,6 +25,7 @@ export const SALES_CHANNELS: SalesChannel[] = [
   "live",
   "music",
   "ad",
+  "deposit",
 ];
 
 export type ExpenseCategory =

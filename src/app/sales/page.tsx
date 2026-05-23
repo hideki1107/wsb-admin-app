@@ -149,12 +149,12 @@ export default function SalesEntryPage() {
             収入を記録
           </h1>
           <p className="text-sm text-zinc-500 sm:text-base">
-            チャネルを選んで金額を入力
+            カテゴリを選んで金額を入力
           </p>
         </div>
       </div>
 
-      <Field label="チャネル">
+      <Field label="カテゴリ">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
           {SALES_CHANNELS.map((ch) => {
             const t = CHANNEL_THEME[ch];

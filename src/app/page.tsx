@@ -127,7 +127,7 @@ export default function DashboardPage() {
     [sales, expenses],
   );
 
-  // チャネル別/カテゴリ別の集計 (フィルタ済)
+  // 収入カテゴリ別/支出カテゴリ別の集計 (フィルタ済)
   const channelTotals = useMemo(() => {
     const map = new Map<SalesChannel, { amount: number; count: number }>();
     for (const s of filteredSales) {
@@ -415,15 +415,15 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* ---- チャネル別収入 ---- */}
+      {/* ---- カテゴリ別収入 ---- */}
       <section>
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
-          <span>📊</span>チャネル別収入
+          <span>📊</span>カテゴリ別収入
           <span className="text-sm font-normal text-zinc-500">
             ({yearLabel(year)})
           </span>
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {SALES_CHANNELS.map((ch) => {
             const t = CHANNEL_THEME[ch];
             const s = channelTotals.get(ch);

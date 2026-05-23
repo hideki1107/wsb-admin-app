@@ -287,7 +287,7 @@ function EditSaleModal({
         </header>
 
         <div>
-          <div className="mb-1.5 text-sm font-bold text-zinc-500">チャネル</div>
+          <div className="mb-1.5 text-sm font-bold text-zinc-500">カテゴリ</div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {SALES_CHANNELS.map((ch) => {
               const t = CHANNEL_THEME[ch];

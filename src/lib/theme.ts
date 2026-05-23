@@ -1,4 +1,4 @@
-// カラーテーマ - チャネル/カテゴリごとの絵文字・グラデーションをまとめる
+// カラーテーマ - 収入/支出のカテゴリごとの絵文字・グラデーションをまとめる
 //
 // Tailwind v4 はビルド時に使われたクラスを抽出するので、
 // 動的補間 (`bg-${color}-50`) は不可。フル文字列で記述すること。
@@ -59,6 +59,14 @@ export const CHANNEL_THEME: Record<SalesChannel, Theme> = {
     ring: "ring-yellow-200",
     text: "text-yellow-700",
     badge: "bg-yellow-100 text-yellow-800",
+  },
+  deposit: {
+    emoji: "💴",
+    label: "入金",
+    gradient: "from-lime-400 to-green-500",
+    ring: "ring-lime-200",
+    text: "text-lime-700",
+    badge: "bg-lime-100 text-lime-800",
   },
 };
 
