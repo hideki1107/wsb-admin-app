@@ -1,5 +1,8 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  type Firestore,
+} from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -21,7 +24,11 @@ let _auth: Auth | null = null;
 
 if (isFirebaseConfigured) {
   _app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
-  _db = getFirestore(_app);
+  // experimentalAutoDetectLongPolling: WebSocket がブロックされる環境
+  // (LINEなどアプリ内ブラウザ、社内プロキシ等) で long-polling に自動フォールバック
+  _db = initializeFirestore(_app, {
+    experimentalAutoDetectLongPolling: true,
+  });
   _auth = getAuth(_app);
 }
 
