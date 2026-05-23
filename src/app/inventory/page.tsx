@@ -107,24 +107,26 @@ export default function InventoryPage() {
                   <div className="text-sm text-zinc-500">
                     {PRODUCT_CATEGORY_LABELS[p.category]} ・ {yen(p.basePrice)}
                   </div>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                      合計
-                    </span>
-                    <span
-                      className={
-                        "text-3xl sm:text-4xl font-black tabular-nums leading-none " +
-                        (total === 0
-                          ? "text-rose-600"
-                          : total <= 5
-                            ? "text-amber-600"
-                            : "text-emerald-700")
-                      }
-                    >
-                      {total}
-                    </span>
-                    <span className="text-sm text-zinc-500">個</span>
-                  </div>
+                  {p.variants.length > 1 && (
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                        合計
+                      </span>
+                      <span
+                        className={
+                          "text-3xl sm:text-4xl font-black tabular-nums leading-none " +
+                          (total === 0
+                            ? "text-rose-600"
+                            : total <= 5
+                              ? "text-amber-600"
+                              : "text-emerald-700")
+                        }
+                      >
+                        {total}
+                      </span>
+                      <span className="text-sm text-zinc-500">個</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex shrink-0 gap-1.5">
                   <button
