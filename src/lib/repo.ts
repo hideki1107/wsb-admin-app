@@ -354,6 +354,89 @@ export async function listSales(opts?: {
   });
 }
 
+// 物販系収入で複数商品を一括登録する。
+// 全行の在庫減算 + sales 作成を 1 transaction で行う。
+// 同じ variant が複数行に出てくる場合も合算して減算。
+export interface MultiSaleItem {
+  productId: string;
+  variantId: string;
+  quantity: number;
+  amount: number;
+}
+
+export interface CreateMultipleSalesInput {
+  occurredOn: string;
+  channel: SalesChannel;
+  items: MultiSaleItem[];
+  memo?: string | null;
+  createdBy?: string | null;
+}
+
+export async function recordMultipleSales(
+  input: CreateMultipleSalesInput,
+): Promise<string[]> {
+  if (input.items.length === 0) throw new Error("商品が指定されていません");
+
+  return await runTransaction(db, async (tx) => {
+    // 1) 同じ variant への減算を集約
+    const stockDeltas = new Map<string, number>(); // path -> 減算量
+    const refByPath = new Map<string, DocumentReference>();
+    for (const item of input.items) {
+      const ref = doc(
+        db,
+        "products",
+        item.productId,
+        "variants",
+        item.variantId,
+      );
+      refByPath.set(ref.path, ref);
+      stockDeltas.set(
+        ref.path,
+        (stockDeltas.get(ref.path) ?? 0) + item.quantity,
+      );
+    }
+
+    // 2) 全 variant を読み込み (transaction では read 先行が必須)
+    const reads = await Promise.all(
+      Array.from(refByPath.values()).map((ref) => tx.get(ref)),
+    );
+    const currentStocks = new Map<string, number>();
+    for (const snap of reads) {
+      if (!snap.exists()) {
+        throw new Error("対象のバリエーションが見つかりません");
+      }
+      currentStocks.set(snap.ref.path, snap.data().stock ?? 0);
+    }
+
+    // 3) 在庫を一括更新
+    for (const [path, delta] of stockDeltas.entries()) {
+      const ref = refByPath.get(path)!;
+      const cur = currentStocks.get(path) ?? 0;
+      tx.update(ref, { stock: cur - delta });
+    }
+
+    // 4) sales 作成 (商品ごとに1ドキュメント)
+    const saleIds: string[] = [];
+    for (const item of input.items) {
+      const saleRef = doc(collection(db, "sales"));
+      tx.set(saleRef, {
+        occurredOn: input.occurredOn,
+        channel: input.channel,
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        amount: item.amount,
+        memo: input.memo ?? null,
+        createdBy: input.createdBy ?? null,
+        createdAt: serverTimestamp(),
+      });
+      saleIds.push(saleRef.id);
+    }
+
+    return saleIds;
+  });
+}
+
 // 売上を編集。物販の場合は旧/新の在庫差分を一括 transaction で再計算する
 export interface UpdateSaleInput {
   occurredOn: string;

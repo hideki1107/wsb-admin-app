@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   listProductsWithVariants,
+  recordMultipleSales,
   recordSale,
   type CreateSaleInput,
+  type MultiSaleItem,
 } from "@/lib/repo";
 import {
   SALES_CHANNELS,
@@ -18,6 +20,27 @@ import { auth } from "@/lib/firebase";
 
 const REQUIRES_VARIANT: SalesChannel[] = ["venue", "online"];
 
+interface ItemRow {
+  id: string;
+  productId: string;
+  variantId: string;
+  quantity: number;
+  amount: number | "";
+}
+
+function newItem(): ItemRow {
+  return {
+    id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : String(Math.random()),
+    productId: "",
+    variantId: "",
+    quantity: 1,
+    amount: "",
+  };
+}
+
 export default function SalesEntryPage() {
   const router = useRouter();
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
@@ -25,10 +48,13 @@ export default function SalesEntryPage() {
 
   const [channel, setChannel] = useState<SalesChannel>("venue");
   const [occurredOn, setOccurredOn] = useState(todayIso());
-  const [productId, setProductId] = useState<string>("");
-  const [variantId, setVariantId] = useState<string>("");
-  const [quantity, setQuantity] = useState(1);
-  const [amount, setAmount] = useState<number | "">("");
+
+  // 物販用: 複数商品リスト
+  const [items, setItems] = useState<ItemRow[]>([newItem()]);
+
+  // 非物販用: 単一金額
+  const [singleAmount, setSingleAmount] = useState<number | "">("");
+
   const [memo, setMemo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,77 +75,129 @@ export default function SalesEntryPage() {
   const requiresVariant = REQUIRES_VARIANT.includes(channel);
   const theme = CHANNEL_THEME[channel];
 
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === productId) ?? null,
-    [products, productId],
-  );
-
-  const selectedVariant = useMemo(
-    () => selectedProduct?.variants.find((v) => v.id === variantId) ?? null,
-    [selectedProduct, variantId],
-  );
-
   function onChangeChannel(next: SalesChannel) {
     setChannel(next);
     if (!REQUIRES_VARIANT.includes(next)) {
-      setProductId("");
-      setVariantId("");
-      setQuantity(1);
+      // 非物販に切り替えるときは items をリセット
+      setItems([newItem()]);
     }
   }
 
-  function onChangeProduct(nextProductId: string) {
-    setProductId(nextProductId);
-    setVariantId("");
-    const p = products.find((p) => p.id === nextProductId);
-    if (p) setAmount(p.basePrice * quantity);
+  function updateItem(id: string, patch: Partial<ItemRow>) {
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+    );
   }
 
-  function onChangeVariant(nextVariantId: string) {
-    setVariantId(nextVariantId);
-    if (selectedProduct) setAmount(selectedProduct.basePrice * quantity);
+  function onChangeItemProduct(id: string, nextProductId: string) {
+    const p = products.find((x) => x.id === nextProductId);
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== id) return it;
+        // variantが1個しかなければ自動選択
+        const autoVariantId =
+          p && p.variants.length === 1 ? p.variants[0]!.id : "";
+        const amount = p && autoVariantId ? p.basePrice * it.quantity : "";
+        return {
+          ...it,
+          productId: nextProductId,
+          variantId: autoVariantId,
+          amount: amount === "" ? it.amount : amount,
+        };
+      }),
+    );
   }
 
-  function onChangeQuantity(nextQty: number) {
+  function onChangeItemVariant(id: string, nextVariantId: string) {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== id) return it;
+        const p = products.find((x) => x.id === it.productId);
+        const amount = p ? p.basePrice * it.quantity : it.amount;
+        return { ...it, variantId: nextVariantId, amount };
+      }),
+    );
+  }
+
+  function onChangeItemQuantity(id: string, nextQty: number) {
     const q = Math.max(1, nextQty || 1);
-    setQuantity(q);
-    if (selectedProduct) setAmount(selectedProduct.basePrice * q);
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== id) return it;
+        const p = products.find((x) => x.id === it.productId);
+        const amount = p ? p.basePrice * q : it.amount;
+        return { ...it, quantity: q, amount };
+      }),
+    );
   }
+
+  function addItemRow() {
+    setItems((prev) => [...prev, newItem()]);
+  }
+
+  function removeItemRow(id: string) {
+    setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev));
+  }
+
+  const itemsTotal = items.reduce(
+    (sum, it) => sum + (Number(it.amount) || 0),
+    0,
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (amount === "" || Number(amount) <= 0) {
+    if (requiresVariant) {
+      // バリデーション: 全行に商品+バリエーション+金額があるか
+      for (const it of items) {
+        if (!it.productId || !it.variantId) {
+          setError("すべての行で商品とバリエーションを選択してください");
+          return;
+        }
+        if (it.amount === "" || Number(it.amount) <= 0) {
+          setError("すべての行の金額を入力してください");
+          return;
+        }
+      }
+      setSubmitting(true);
+      try {
+        const multiItems: MultiSaleItem[] = items.map((it) => ({
+          productId: it.productId,
+          variantId: it.variantId,
+          quantity: it.quantity,
+          amount: Number(it.amount),
+        }));
+        await recordMultipleSales({
+          occurredOn,
+          channel,
+          items: multiItems,
+          memo: memo.trim() || null,
+          createdBy: auth.currentUser?.uid ?? null,
+        });
+        router.push("/sales/list");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // 非物販: 単一金額
+    if (singleAmount === "" || Number(singleAmount) <= 0) {
       setError("金額を入力してください");
       return;
     }
-    if (requiresVariant && (!productId || !variantId)) {
-      setError("商品とバリエーションを選択してください");
-      return;
-    }
-    if (
-      requiresVariant &&
-      selectedVariant &&
-      selectedVariant.stock < quantity
-    ) {
-      const ok = confirm(
-        `在庫が${selectedVariant.stock}個しかありませんが、${quantity}個分の収入として記録しますか？`,
-      );
-      if (!ok) return;
-    }
-
     const input: CreateSaleInput = {
       occurredOn,
       channel,
-      productId: requiresVariant ? productId : null,
-      variantId: requiresVariant ? variantId : null,
-      quantity: requiresVariant ? quantity : 1,
-      amount: Number(amount),
+      productId: null,
+      variantId: null,
+      quantity: 1,
+      amount: Number(singleAmount),
       memo: memo.trim() || null,
       createdBy: auth.currentUser?.uid ?? null,
     };
-
     setSubmitting(true);
     try {
       await recordSale(input);
@@ -190,94 +268,193 @@ export default function SalesEntryPage() {
             className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
           />
         </Field>
+      </Card>
 
-        {requiresVariant && (
-          <>
-            <Field label="商品">
-              <select
-                value={productId}
-                onChange={(e) => onChangeProduct(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-              >
-                <option value="">選択してください</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({yen(p.basePrice)})
-                  </option>
-                ))}
-              </select>
-            </Field>
+      {requiresVariant ? (
+        <>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-bold uppercase tracking-wider text-zinc-500">
+                商品 ({items.length}点)
+              </span>
+              <span className="text-sm text-zinc-500">
+                合計{" "}
+                <span className="text-lg font-extrabold text-zinc-900">
+                  {yen(itemsTotal)}
+                </span>
+              </span>
+            </div>
 
-            {selectedProduct && (
-              <Field label="バリエーション">
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                  {selectedProduct.variants.map((v) => {
-                    const label =
-                      v.color === "-" && v.size === "-"
-                        ? "標準"
-                        : [v.color, v.size]
-                            .filter((x) => x !== "-")
-                            .join(" / ");
-                    const isSelected = v.id === variantId;
-                    return (
-                      <button
-                        type="button"
-                        key={v.id}
-                        onClick={() => onChangeVariant(v.id)}
-                        className={
-                          "rounded-xl px-3 py-3 text-base transition " +
-                          (isSelected
-                            ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-md scale-105"
-                            : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300 hover:shadow-sm")
-                        }
-                      >
-                        <div className="font-medium">{label}</div>
-                        <div
-                          className={
-                            "text-sm " +
-                            (isSelected ? "text-white/80" : "text-zinc-500")
-                          }
+            <div className="space-y-3">
+              {items.map((it, idx) => {
+                const selectedProduct = products.find(
+                  (p) => p.id === it.productId,
+                );
+                return (
+                  <div
+                    key={it.id}
+                    className="space-y-3 rounded-2xl bg-white p-4 shadow ring-1 ring-zinc-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                        #{idx + 1}
+                      </span>
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItemRow(it.id)}
+                          className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100"
+                          aria-label="行を削除"
                         >
-                          残 {v.stock}
+                          削除
+                        </button>
+                      )}
+                    </div>
+
+                    <label className="block">
+                      <div className="mb-1 text-xs font-bold text-zinc-500">
+                        商品
+                      </div>
+                      <select
+                        value={it.productId}
+                        onChange={(e) =>
+                          onChangeItemProduct(it.id, e.target.value)
+                        }
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                      >
+                        <option value="">選択してください</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({yen(p.basePrice)})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {selectedProduct && selectedProduct.variants.length > 1 && (
+                      <div>
+                        <div className="mb-1 text-xs font-bold text-zinc-500">
+                          バリエーション
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-            )}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {selectedProduct.variants.map((v) => {
+                            const label =
+                              v.color === "-" && v.size === "-"
+                                ? "標準"
+                                : [v.color, v.size]
+                                    .filter((x) => x !== "-")
+                                    .join(" / ");
+                            const isSelected = v.id === it.variantId;
+                            return (
+                              <button
+                                type="button"
+                                key={v.id}
+                                onClick={() =>
+                                  onChangeItemVariant(it.id, v.id)
+                                }
+                                className={
+                                  "rounded-xl px-2 py-2 text-sm transition " +
+                                  (isSelected
+                                    ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow scale-105"
+                                    : "bg-white text-zinc-700 ring-1 ring-zinc-200")
+                                }
+                              >
+                                <div className="font-medium">{label}</div>
+                                <div
+                                  className={
+                                    "text-xs " +
+                                    (isSelected
+                                      ? "text-white/80"
+                                      : "text-zinc-500")
+                                  }
+                                >
+                                  残 {v.stock}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-            <Field label="数量">
-              <input
-                type="number"
-                min={1}
-                value={quantity}
-                onChange={(e) => onChangeQuantity(Number(e.target.value))}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-              />
-            </Field>
-          </>
-        )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <div className="mb-1 text-xs font-bold text-zinc-500">
+                          数量
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          value={it.quantity}
+                          onChange={(e) =>
+                            onChangeItemQuantity(
+                              it.id,
+                              Number(e.target.value),
+                            )
+                          }
+                          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                        />
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-xs font-bold text-zinc-500">
+                          金額 (円)
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={it.amount}
+                          onChange={(e) =>
+                            updateItem(it.id, {
+                              amount:
+                                e.target.value === ""
+                                  ? ""
+                                  : Number(e.target.value),
+                            })
+                          }
+                          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-base font-bold outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
-        <Field label="金額 (円)">
-          <input
-            type="number"
-            min={0}
-            value={amount}
-            onChange={(e) =>
-              setAmount(e.target.value === "" ? "" : Number(e.target.value))
-            }
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xl font-bold outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-            placeholder="例: 5000"
-          />
-        </Field>
+            <button
+              type="button"
+              onClick={addItemRow}
+              className="mt-3 w-full rounded-2xl border-2 border-dashed border-violet-300 bg-white px-4 py-3 text-base font-semibold text-violet-700 hover:border-violet-500 hover:bg-violet-50"
+            >
+              + 商品を追加
+            </button>
+          </div>
+        </>
+      ) : (
+        <Card>
+          <Field label="金額 (円)">
+            <input
+              type="number"
+              min={0}
+              value={singleAmount}
+              onChange={(e) =>
+                setSingleAmount(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
+              className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xl font-bold outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+              placeholder="例: 5000"
+            />
+          </Field>
+        </Card>
+      )}
 
+      <Card>
         <Field label="メモ (任意)">
           <input
             type="text"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="例: 渋谷WWW物販、Spotify印税"
+            placeholder="例: 渋谷WWW物販、Spotify印税、阿部入金"
             className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
           />
         </Field>
@@ -295,7 +472,11 @@ export default function SalesEntryPage() {
           disabled={submitting}
           className="flex-1 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-4 text-lg font-bold text-white shadow-xl shadow-fuchsia-200 transition hover:scale-[1.02] active:scale-95 disabled:opacity-50 sm:flex-none sm:px-12"
         >
-          {submitting ? "登録中…" : "登録する"}
+          {submitting
+            ? "登録中…"
+            : requiresVariant && items.length > 1
+              ? `${items.length}件をまとめて登録`
+              : "登録する"}
         </button>
         <button
           type="button"
