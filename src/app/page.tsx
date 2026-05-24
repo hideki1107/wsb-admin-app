@@ -22,9 +22,7 @@ import { yen } from "@/lib/format";
 const LOW_STOCK_THRESHOLD = 5;
 
 const ALL_YEARS = "all" as const;
-const ALL_MONTHS = "all" as const;
 type YearFilter = number | typeof ALL_YEARS;
-type MonthFilter = number | typeof ALL_MONTHS;
 
 export default function DashboardPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -33,12 +31,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<YearFilter>(ALL_YEARS);
-  const [month, setMonth] = useState<MonthFilter>(ALL_MONTHS);
+  // 月フィルタ: 空配列なら通年、選択した月のみ表示
+  const [months, setMonths] = useState<number[]>([]);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   function selectYear(next: YearFilter) {
     setYear(next);
-    setMonth(ALL_MONTHS); // 年を変えたら月はリセット
+    setMonths([]); // 年を変えたら月はリセット
+  }
+
+  function toggleMonth(m: number) {
+    setMonths((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m].sort((a, b) => a - b),
+    );
   }
 
   useEffect(() => {
@@ -109,14 +114,14 @@ export default function DashboardPage() {
       result = result.filter(
         (s) => parseInt(s.occurredOn.slice(0, 4), 10) === year,
       );
-      if (month !== ALL_MONTHS) {
-        result = result.filter(
-          (s) => parseInt(s.occurredOn.slice(5, 7), 10) === month,
+      if (months.length > 0) {
+        result = result.filter((s) =>
+          months.includes(parseInt(s.occurredOn.slice(5, 7), 10)),
         );
       }
     }
     return result;
-  }, [sales, year, month]);
+  }, [sales, year, months]);
 
   const filteredExpenses = useMemo(() => {
     let result = expenses;
@@ -124,14 +129,14 @@ export default function DashboardPage() {
       result = result.filter(
         (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
       );
-      if (month !== ALL_MONTHS) {
-        result = result.filter(
-          (e) => parseInt(e.occurredOn.slice(5, 7), 10) === month,
+      if (months.length > 0) {
+        result = result.filter((e) =>
+          months.includes(parseInt(e.occurredOn.slice(5, 7), 10)),
         );
       }
     }
     return result;
-  }, [expenses, year, month]);
+  }, [expenses, year, months]);
 
   // 選択中の年に含まれる月の一覧
   const availableMonths = useMemo(() => {
@@ -258,7 +263,7 @@ export default function DashboardPage() {
           <div className="mt-6 grid grid-cols-2 gap-3 text-base sm:max-w-lg">
             <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
               <div className="text-sm text-white/75">
-                累計収入 ({periodLabel(year, month)})
+                累計収入 ({periodLabel(year, months)})
               </div>
               <div className="mt-1 text-xl font-bold sm:text-2xl">
                 {yen(revenue)}
@@ -266,7 +271,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
               <div className="text-sm text-white/75">
-                累計支出 ({periodLabel(year, month)})
+                累計支出 ({periodLabel(year, months)})
               </div>
               <div className="mt-1 text-xl font-bold sm:text-2xl">
                 -{yen(expenseTotal)}
@@ -309,35 +314,40 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* 月セレクタ (年を選んでいるときのみ) */}
+        {/* 月セレクタ (年を選んでいるときのみ。複数選択可、未選択=通年) */}
         {year !== ALL_YEARS && availableMonths.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pl-4 sm:pl-0">
-            <span className="text-xs font-bold text-zinc-500">月</span>
-            <button
-              onClick={() => setMonth(ALL_MONTHS)}
-              className={
-                "rounded-full px-3 py-1 text-xs font-semibold transition " +
-                (month === ALL_MONTHS
-                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
-                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
-              }
-            >
-              全月
-            </button>
-            {availableMonths.map((m) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {availableMonths.map((m) => {
+              const checked = months.includes(m);
+              return (
+                <label
+                  key={m}
+                  className={
+                    "flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition " +
+                    (checked
+                      ? "bg-violet-100 text-violet-900 ring-2 ring-violet-500"
+                      : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleMonth(m)}
+                    className="h-4 w-4 cursor-pointer accent-violet-600"
+                  />
+                  {m}月
+                </label>
+              );
+            })}
+            {months.length > 0 && (
               <button
-                key={m}
-                onClick={() => setMonth(m)}
-                className={
-                  "rounded-full px-3 py-1 text-xs font-semibold transition " +
-                  (month === m
-                    ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
-                    : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
-                }
+                type="button"
+                onClick={() => setMonths([])}
+                className="text-xs font-semibold text-zinc-500 hover:underline"
               >
-                {m}月
+                クリア (通年に戻す)
               </button>
-            ))}
+            )}
           </div>
         )}
       </section>
@@ -347,7 +357,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>📅</span>月毎の収支
           <span className="text-sm font-normal text-zinc-500">
-            ({periodLabel(year, month)})
+            ({periodLabel(year, months)})
           </span>
         </h2>
         {monthlyRows.length === 0 ? (
@@ -497,7 +507,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>📊</span>カテゴリ別収入
           <span className="text-sm font-normal text-zinc-500">
-            ({periodLabel(year, month)})
+            ({periodLabel(year, months)})
           </span>
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -507,7 +517,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={ch}
-                href={buildListHref("/sales/list", ch, year, month)}
+                href={buildListHref("/sales/list", ch, year, months)}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -541,7 +551,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>🧾</span>カテゴリ別支出
           <span className="text-sm font-normal text-zinc-500">
-            ({periodLabel(year, month)})
+            ({periodLabel(year, months)})
           </span>
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -551,7 +561,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={cat}
-                href={buildListHref("/expenses/list", cat, year, month)}
+                href={buildListHref("/expenses/list", cat, year, months)}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -693,22 +703,23 @@ function formatYm(key: string): string {
   return `${y}年${m}月`;
 }
 
-function periodLabel(year: YearFilter, month: MonthFilter): string {
+function periodLabel(year: YearFilter, months: number[]): string {
   if (year === ALL_YEARS) return "全期間";
-  if (month === ALL_MONTHS) return `${year}年`;
-  return `${year}年${month}月`;
+  if (months.length === 0) return `${year}年`;
+  if (months.length === 1) return `${year}年${months[0]}月`;
+  return `${year}年 ${months.join("/")}月`;
 }
 
 function buildListHref(
   base: string,
   category: string,
   year: YearFilter,
-  month: MonthFilter,
+  months: number[],
 ): string {
   const params = new URLSearchParams();
   params.set("category", category);
   if (year !== ALL_YEARS) params.set("year", String(year));
-  if (year !== ALL_YEARS && month !== ALL_MONTHS)
-    params.set("month", String(month));
+  if (year !== ALL_YEARS && months.length > 0)
+    params.set("months", months.join(","));
   return `${base}?${params.toString()}`;
 }

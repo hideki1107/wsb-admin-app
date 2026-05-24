@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useMemo } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   deleteExpense,
@@ -18,9 +18,7 @@ import { yen } from "@/lib/format";
 
 type CategoryFilter = ExpenseCategory | "all";
 const ALL_YEARS = "all" as const;
-const ALL_MONTHS = "all" as const;
 type YearFilter = number | typeof ALL_YEARS;
-type MonthFilter = number | typeof ALL_MONTHS;
 
 function parseFilter(raw: string | null): CategoryFilter {
   if (!raw) return "all";
@@ -35,22 +33,25 @@ function parseYearFilter(raw: string | null): YearFilter {
   return Number.isFinite(n) ? n : ALL_YEARS;
 }
 
-function parseMonthFilter(raw: string | null): MonthFilter {
-  if (!raw || raw === "all") return ALL_MONTHS;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : ALL_MONTHS;
+function parseMonths(raw: string | null): number[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 1 && n <= 12)
+    .sort((a, b) => a - b);
 }
 
 function buildExpensesListUrl(
   cat: CategoryFilter,
   year: YearFilter,
-  month: MonthFilter,
+  months: number[],
 ): string {
   const params = new URLSearchParams();
   if (cat !== "all") params.set("category", cat);
   if (year !== ALL_YEARS) params.set("year", String(year));
-  if (year !== ALL_YEARS && month !== ALL_MONTHS)
-    params.set("month", String(month));
+  if (year !== ALL_YEARS && months.length > 0)
+    params.set("months", months.join(","));
   const qs = params.toString();
   return qs ? `/expenses/list?${qs}` : "/expenses/list";
 }
@@ -68,18 +69,22 @@ function ExpensesListInner() {
   const searchParams = useSearchParams();
   const filter = parseFilter(searchParams.get("category"));
   const year = parseYearFilter(searchParams.get("year"));
-  const month = parseMonthFilter(searchParams.get("month"));
+  const months = parseMonths(searchParams.get("months"));
 
   function setFilter(next: CategoryFilter) {
-    router.replace(buildExpensesListUrl(next, year, month), { scroll: false });
+    router.replace(buildExpensesListUrl(next, year, months), { scroll: false });
   }
   function setYear(next: YearFilter) {
-    router.replace(buildExpensesListUrl(filter, next, ALL_MONTHS), {
-      scroll: false,
-    });
+    router.replace(buildExpensesListUrl(filter, next, []), { scroll: false });
   }
-  function setMonth(next: MonthFilter) {
+  function toggleMonth(m: number) {
+    const next = months.includes(m)
+      ? months.filter((x) => x !== m)
+      : [...months, m].sort((a, b) => a - b);
     router.replace(buildExpensesListUrl(filter, year, next), { scroll: false });
+  }
+  function clearMonths() {
+    router.replace(buildExpensesListUrl(filter, year, []), { scroll: false });
   }
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -88,16 +93,17 @@ function ExpensesListInner() {
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const availableYears = useMemo(() => {
+  // React Compiler が自動メモ化
+  const availableYears: number[] = (() => {
     const set = new Set<number>();
     for (const e of expenses) {
       const y = parseInt(e.occurredOn.slice(0, 4), 10);
       if (!Number.isNaN(y)) set.add(y);
     }
     return Array.from(set).sort((a, b) => b - a);
-  }, [expenses]);
+  })();
 
-  const availableMonths = useMemo(() => {
+  const availableMonths: number[] = (() => {
     if (year === ALL_YEARS) return [];
     const set = new Set<number>();
     for (const e of expenses) {
@@ -107,23 +113,21 @@ function ExpensesListInner() {
       }
     }
     return Array.from(set).sort((a, b) => a - b);
-  }, [expenses, year]);
+  })();
 
-  const filteredExpenses = useMemo(() => {
-    let result = expenses;
-    if (filter !== "all") result = result.filter((e) => e.category === filter);
-    if (year !== ALL_YEARS) {
-      result = result.filter(
-        (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
+  let filteredExpenses: Expense[] = expenses;
+  if (filter !== "all")
+    filteredExpenses = filteredExpenses.filter((e) => e.category === filter);
+  if (year !== ALL_YEARS) {
+    filteredExpenses = filteredExpenses.filter(
+      (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
+    );
+    if (months.length > 0) {
+      filteredExpenses = filteredExpenses.filter((e) =>
+        months.includes(parseInt(e.occurredOn.slice(5, 7), 10)),
       );
-      if (month !== ALL_MONTHS) {
-        result = result.filter(
-          (e) => parseInt(e.occurredOn.slice(5, 7), 10) === month,
-        );
-      }
     }
-    return result;
-  }, [expenses, filter, year, month]);
+  }
 
   async function refresh() {
     setExpenses(await listExpenses());
@@ -200,34 +204,37 @@ function ExpensesListInner() {
 
         {year !== ALL_YEARS && availableMonths.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-zinc-500">月</span>
-            <button
-              type="button"
-              onClick={() => setMonth(ALL_MONTHS)}
-              className={
-                "rounded-full px-3 py-1 text-xs font-semibold transition " +
-                (month === ALL_MONTHS
-                  ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow"
-                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
-              }
-            >
-              全月
-            </button>
-            {availableMonths.map((m) => (
+            {availableMonths.map((m) => {
+              const checked = months.includes(m);
+              return (
+                <label
+                  key={m}
+                  className={
+                    "flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition " +
+                    (checked
+                      ? "bg-rose-100 text-rose-900 ring-2 ring-rose-500"
+                      : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleMonth(m)}
+                    className="h-4 w-4 cursor-pointer accent-rose-600"
+                  />
+                  {m}月
+                </label>
+              );
+            })}
+            {months.length > 0 && (
               <button
                 type="button"
-                key={m}
-                onClick={() => setMonth(m)}
-                className={
-                  "rounded-full px-3 py-1 text-xs font-semibold transition " +
-                  (month === m
-                    ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow"
-                    : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
-                }
+                onClick={clearMonths}
+                className="text-xs font-semibold text-zinc-500 hover:underline"
               >
-                {m}月
+                クリア (通年に戻す)
               </button>
-            ))}
+            )}
           </div>
         )}
         <label className="block">
