@@ -18,7 +18,9 @@ import { yen } from "@/lib/format";
 
 type CategoryFilter = ExpenseCategory | "all";
 const ALL_YEARS = "all" as const;
+const ALL_MONTHS = "all" as const;
 type YearFilter = number | typeof ALL_YEARS;
+type MonthFilter = number | typeof ALL_MONTHS;
 
 function parseFilter(raw: string | null): CategoryFilter {
   if (!raw) return "all";
@@ -33,10 +35,22 @@ function parseYearFilter(raw: string | null): YearFilter {
   return Number.isFinite(n) ? n : ALL_YEARS;
 }
 
-function buildExpensesListUrl(cat: CategoryFilter, year: YearFilter): string {
+function parseMonthFilter(raw: string | null): MonthFilter {
+  if (!raw || raw === "all") return ALL_MONTHS;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : ALL_MONTHS;
+}
+
+function buildExpensesListUrl(
+  cat: CategoryFilter,
+  year: YearFilter,
+  month: MonthFilter,
+): string {
   const params = new URLSearchParams();
   if (cat !== "all") params.set("category", cat);
   if (year !== ALL_YEARS) params.set("year", String(year));
+  if (year !== ALL_YEARS && month !== ALL_MONTHS)
+    params.set("month", String(month));
   const qs = params.toString();
   return qs ? `/expenses/list?${qs}` : "/expenses/list";
 }
@@ -54,12 +68,18 @@ function ExpensesListInner() {
   const searchParams = useSearchParams();
   const filter = parseFilter(searchParams.get("category"));
   const year = parseYearFilter(searchParams.get("year"));
+  const month = parseMonthFilter(searchParams.get("month"));
 
   function setFilter(next: CategoryFilter) {
-    router.replace(buildExpensesListUrl(next, year), { scroll: false });
+    router.replace(buildExpensesListUrl(next, year, month), { scroll: false });
   }
   function setYear(next: YearFilter) {
-    router.replace(buildExpensesListUrl(filter, next), { scroll: false });
+    router.replace(buildExpensesListUrl(filter, next, ALL_MONTHS), {
+      scroll: false,
+    });
+  }
+  function setMonth(next: MonthFilter) {
+    router.replace(buildExpensesListUrl(filter, year, next), { scroll: false });
   }
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -77,6 +97,18 @@ function ExpensesListInner() {
     return Array.from(set).sort((a, b) => b - a);
   }, [expenses]);
 
+  const availableMonths = useMemo(() => {
+    if (year === ALL_YEARS) return [];
+    const set = new Set<number>();
+    for (const e of expenses) {
+      if (parseInt(e.occurredOn.slice(0, 4), 10) === year) {
+        const m = parseInt(e.occurredOn.slice(5, 7), 10);
+        if (!Number.isNaN(m)) set.add(m);
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [expenses, year]);
+
   const filteredExpenses = useMemo(() => {
     let result = expenses;
     if (filter !== "all") result = result.filter((e) => e.category === filter);
@@ -84,9 +116,14 @@ function ExpensesListInner() {
       result = result.filter(
         (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
       );
+      if (month !== ALL_MONTHS) {
+        result = result.filter(
+          (e) => parseInt(e.occurredOn.slice(5, 7), 10) === month,
+        );
+      }
     }
     return result;
-  }, [expenses, filter, year]);
+  }, [expenses, filter, year, month]);
 
   async function refresh() {
     setExpenses(await listExpenses());
@@ -160,6 +197,39 @@ function ExpensesListInner() {
             </button>
           ))}
         </div>
+
+        {year !== ALL_YEARS && availableMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-zinc-500">月</span>
+            <button
+              type="button"
+              onClick={() => setMonth(ALL_MONTHS)}
+              className={
+                "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                (month === ALL_MONTHS
+                  ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
+              }
+            >
+              全月
+            </button>
+            {availableMonths.map((m) => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => setMonth(m)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                  (month === m
+                    ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow"
+                    : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-rose-300")
+                }
+              >
+                {m}月
+              </button>
+            ))}
+          </div>
+        )}
         <label className="block">
           <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
             カテゴリで絞り込み

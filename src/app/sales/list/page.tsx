@@ -23,7 +23,9 @@ const REQUIRES_VARIANT: SalesChannel[] = ["venue", "online"];
 
 type ChannelFilter = SalesChannel | "all";
 const ALL_YEARS = "all" as const;
+const ALL_MONTHS = "all" as const;
 type YearFilter = number | typeof ALL_YEARS;
+type MonthFilter = number | typeof ALL_MONTHS;
 
 function parseFilter(raw: string | null): ChannelFilter {
   if (!raw) return "all";
@@ -37,10 +39,22 @@ function parseYearFilter(raw: string | null): YearFilter {
   return Number.isFinite(n) ? n : ALL_YEARS;
 }
 
-function buildSalesListUrl(cat: ChannelFilter, year: YearFilter): string {
+function parseMonthFilter(raw: string | null): MonthFilter {
+  if (!raw || raw === "all") return ALL_MONTHS;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : ALL_MONTHS;
+}
+
+function buildSalesListUrl(
+  cat: ChannelFilter,
+  year: YearFilter,
+  month: MonthFilter,
+): string {
   const params = new URLSearchParams();
   if (cat !== "all") params.set("category", cat);
   if (year !== ALL_YEARS) params.set("year", String(year));
+  if (year !== ALL_YEARS && month !== ALL_MONTHS)
+    params.set("month", String(month));
   const qs = params.toString();
   return qs ? `/sales/list?${qs}` : "/sales/list";
 }
@@ -58,12 +72,19 @@ function SalesListInner() {
   const searchParams = useSearchParams();
   const filter = parseFilter(searchParams.get("category"));
   const year = parseYearFilter(searchParams.get("year"));
+  const month = parseMonthFilter(searchParams.get("month"));
 
   function setFilter(next: ChannelFilter) {
-    router.replace(buildSalesListUrl(next, year), { scroll: false });
+    router.replace(buildSalesListUrl(next, year, month), { scroll: false });
   }
   function setYear(next: YearFilter) {
-    router.replace(buildSalesListUrl(filter, next), { scroll: false });
+    // 年を変えたら月はリセット
+    router.replace(buildSalesListUrl(filter, next, ALL_MONTHS), {
+      scroll: false,
+    });
+  }
+  function setMonth(next: MonthFilter) {
+    router.replace(buildSalesListUrl(filter, year, next), { scroll: false });
   }
 
   const [sales, setSales] = useState<Sale[]>([]);
@@ -82,6 +103,18 @@ function SalesListInner() {
     return Array.from(set).sort((a, b) => b - a);
   }, [sales]);
 
+  const availableMonths = useMemo(() => {
+    if (year === ALL_YEARS) return [];
+    const set = new Set<number>();
+    for (const s of sales) {
+      if (parseInt(s.occurredOn.slice(0, 4), 10) === year) {
+        const m = parseInt(s.occurredOn.slice(5, 7), 10);
+        if (!Number.isNaN(m)) set.add(m);
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [sales, year]);
+
   const filteredSales = useMemo(() => {
     let result = sales;
     if (filter !== "all") result = result.filter((s) => s.channel === filter);
@@ -89,9 +122,14 @@ function SalesListInner() {
       result = result.filter(
         (s) => parseInt(s.occurredOn.slice(0, 4), 10) === year,
       );
+      if (month !== ALL_MONTHS) {
+        result = result.filter(
+          (s) => parseInt(s.occurredOn.slice(5, 7), 10) === month,
+        );
+      }
     }
     return result;
-  }, [sales, filter, year]);
+  }, [sales, filter, year, month]);
 
   async function refresh() {
     const [s, p] = await Promise.all([
@@ -171,6 +209,39 @@ function SalesListInner() {
             </button>
           ))}
         </div>
+
+        {year !== ALL_YEARS && availableMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-zinc-500">月</span>
+            <button
+              type="button"
+              onClick={() => setMonth(ALL_MONTHS)}
+              className={
+                "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                (month === ALL_MONTHS
+                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+              }
+            >
+              全月
+            </button>
+            {availableMonths.map((m) => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => setMonth(m)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                  (month === m
+                    ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
+                    : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+                }
+              >
+                {m}月
+              </button>
+            ))}
+          </div>
+        )}
         <label className="block">
           <span className="mb-1.5 block text-sm font-bold uppercase tracking-wider text-zinc-500">
             カテゴリで絞り込み

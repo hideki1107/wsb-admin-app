@@ -22,7 +22,9 @@ import { yen } from "@/lib/format";
 const LOW_STOCK_THRESHOLD = 5;
 
 const ALL_YEARS = "all" as const;
+const ALL_MONTHS = "all" as const;
 type YearFilter = number | typeof ALL_YEARS;
+type MonthFilter = number | typeof ALL_MONTHS;
 
 export default function DashboardPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -31,7 +33,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<YearFilter>(ALL_YEARS);
+  const [month, setMonth] = useState<MonthFilter>(ALL_MONTHS);
   const [loadAttempt, setLoadAttempt] = useState(0);
+
+  function selectYear(next: YearFilter) {
+    setYear(next);
+    setMonth(ALL_MONTHS); // 年を変えたら月はリセット
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -94,20 +102,55 @@ export default function DashboardPage() {
     return Array.from(set).sort((a, b) => b - a);
   }, [sales, expenses]);
 
-  // 選択中の年でフィルタしたデータ (全期間は無加工)
+  // 選択中の年+月でフィルタしたデータ
   const filteredSales = useMemo(() => {
-    if (year === ALL_YEARS) return sales;
-    return sales.filter(
-      (s) => parseInt(s.occurredOn.slice(0, 4), 10) === year,
-    );
-  }, [sales, year]);
+    let result = sales;
+    if (year !== ALL_YEARS) {
+      result = result.filter(
+        (s) => parseInt(s.occurredOn.slice(0, 4), 10) === year,
+      );
+      if (month !== ALL_MONTHS) {
+        result = result.filter(
+          (s) => parseInt(s.occurredOn.slice(5, 7), 10) === month,
+        );
+      }
+    }
+    return result;
+  }, [sales, year, month]);
 
   const filteredExpenses = useMemo(() => {
-    if (year === ALL_YEARS) return expenses;
-    return expenses.filter(
-      (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
-    );
-  }, [expenses, year]);
+    let result = expenses;
+    if (year !== ALL_YEARS) {
+      result = result.filter(
+        (e) => parseInt(e.occurredOn.slice(0, 4), 10) === year,
+      );
+      if (month !== ALL_MONTHS) {
+        result = result.filter(
+          (e) => parseInt(e.occurredOn.slice(5, 7), 10) === month,
+        );
+      }
+    }
+    return result;
+  }, [expenses, year, month]);
+
+  // 選択中の年に含まれる月の一覧
+  const availableMonths = useMemo(() => {
+    if (year === ALL_YEARS) return [];
+    const set = new Set<number>();
+    for (const s of sales) {
+      if (parseInt(s.occurredOn.slice(0, 4), 10) === year) {
+        const m = parseInt(s.occurredOn.slice(5, 7), 10);
+        if (!Number.isNaN(m)) set.add(m);
+      }
+    }
+    for (const e of expenses) {
+      if (parseInt(e.occurredOn.slice(0, 4), 10) === year) {
+        const m = parseInt(e.occurredOn.slice(5, 7), 10);
+        if (!Number.isNaN(m)) set.add(m);
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [sales, expenses, year]);
 
   // 累計値 (フィルタ後)
   const revenue = useMemo(
@@ -215,7 +258,7 @@ export default function DashboardPage() {
           <div className="mt-6 grid grid-cols-2 gap-3 text-base sm:max-w-lg">
             <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
               <div className="text-sm text-white/75">
-                累計収入 ({yearLabel(year)})
+                累計収入 ({periodLabel(year, month)})
               </div>
               <div className="mt-1 text-xl font-bold sm:text-2xl">
                 {yen(revenue)}
@@ -223,7 +266,7 @@ export default function DashboardPage() {
             </div>
             <div className="rounded-2xl bg-white/15 px-4 py-3 backdrop-blur sm:px-5 sm:py-4">
               <div className="text-sm text-white/75">
-                累計支出 ({yearLabel(year)})
+                累計支出 ({periodLabel(year, month)})
               </div>
               <div className="mt-1 text-xl font-bold sm:text-2xl">
                 -{yen(expenseTotal)}
@@ -234,35 +277,69 @@ export default function DashboardPage() {
       </section>
 
       {/* ---- 年セレクタ ---- */}
-      <section className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold text-zinc-600 sm:text-base">
-          表示期間
-        </span>
-        <button
-          onClick={() => setYear(ALL_YEARS)}
-          className={
-            "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
-            (year === ALL_YEARS
-              ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
-              : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
-          }
-        >
-          全期間
-        </button>
-        {availableYears.map((y) => (
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-zinc-600 sm:text-base">
+            表示期間
+          </span>
           <button
-            key={y}
-            onClick={() => setYear(y)}
+            onClick={() => selectYear(ALL_YEARS)}
             className={
               "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
-              (year === y
+              (year === ALL_YEARS
                 ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
                 : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
             }
           >
-            {y}年
+            全期間
           </button>
-        ))}
+          {availableYears.map((y) => (
+            <button
+              key={y}
+              onClick={() => selectYear(y)}
+              className={
+                "rounded-full px-4 py-1.5 text-sm font-semibold transition " +
+                (year === y
+                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+              }
+            >
+              {y}年
+            </button>
+          ))}
+        </div>
+
+        {/* 月セレクタ (年を選んでいるときのみ) */}
+        {year !== ALL_YEARS && availableMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 pl-4 sm:pl-0">
+            <span className="text-xs font-bold text-zinc-500">月</span>
+            <button
+              onClick={() => setMonth(ALL_MONTHS)}
+              className={
+                "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                (month === ALL_MONTHS
+                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
+                  : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+              }
+            >
+              全月
+            </button>
+            {availableMonths.map((m) => (
+              <button
+                key={m}
+                onClick={() => setMonth(m)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-semibold transition " +
+                  (month === m
+                    ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow"
+                    : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-violet-300")
+                }
+              >
+                {m}月
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ---- 月毎収支テーブル ---- */}
@@ -270,7 +347,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>📅</span>月毎の収支
           <span className="text-sm font-normal text-zinc-500">
-            ({yearLabel(year)})
+            ({periodLabel(year, month)})
           </span>
         </h2>
         {monthlyRows.length === 0 ? (
@@ -420,7 +497,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>📊</span>カテゴリ別収入
           <span className="text-sm font-normal text-zinc-500">
-            ({yearLabel(year)})
+            ({periodLabel(year, month)})
           </span>
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -430,11 +507,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={ch}
-                href={
-                  year === ALL_YEARS
-                    ? `/sales/list?category=${ch}`
-                    : `/sales/list?category=${ch}&year=${year}`
-                }
+                href={buildListHref("/sales/list", ch, year, month)}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -468,7 +541,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-zinc-800 sm:text-2xl">
           <span>🧾</span>カテゴリ別支出
           <span className="text-sm font-normal text-zinc-500">
-            ({yearLabel(year)})
+            ({periodLabel(year, month)})
           </span>
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -478,11 +551,7 @@ export default function DashboardPage() {
             return (
               <Link
                 key={cat}
-                href={
-                  year === ALL_YEARS
-                    ? `/expenses/list?category=${cat}`
-                    : `/expenses/list?category=${cat}&year=${year}`
-                }
+                href={buildListHref("/expenses/list", cat, year, month)}
                 className={
                   "block rounded-2xl bg-white p-4 shadow-lg ring-1 ring-inset transition hover:scale-105 hover:shadow-xl active:scale-95 sm:p-5 " +
                   t.ring
@@ -624,6 +693,22 @@ function formatYm(key: string): string {
   return `${y}年${m}月`;
 }
 
-function yearLabel(year: YearFilter): string {
-  return year === ALL_YEARS ? "全期間" : `${year}年`;
+function periodLabel(year: YearFilter, month: MonthFilter): string {
+  if (year === ALL_YEARS) return "全期間";
+  if (month === ALL_MONTHS) return `${year}年`;
+  return `${year}年${month}月`;
+}
+
+function buildListHref(
+  base: string,
+  category: string,
+  year: YearFilter,
+  month: MonthFilter,
+): string {
+  const params = new URLSearchParams();
+  params.set("category", category);
+  if (year !== ALL_YEARS) params.set("year", String(year));
+  if (year !== ALL_YEARS && month !== ALL_MONTHS)
+    params.set("month", String(month));
+  return `${base}?${params.toString()}`;
 }
